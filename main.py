@@ -20,11 +20,11 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  Training Scenario 1 (small-scale, best results):
-    python main.py --mode train --scenario 1 --episodes 10000
+  Training Scenario 1 (small-scale, best results with GPU):
+    python main.py --mode train --scenario 1 --episodes 10000 --num-envs 8
     
-  Training Scenario 2 (large-scale, best results):
-    python main.py --mode train --scenario 2 --episodes 20000
+  Training Scenario 2 (large-scale, best results with GPU):
+    python main.py --mode train --scenario 2 --episodes 20000 --num-envs 4
     
   Quick training (testing):
     python main.py --mode train --scenario 1 --episodes 2000
@@ -37,6 +37,9 @@ Examples:
     
   Quick test:
     python main.py --mode quick-test
+    
+  Parallel environments for GPU utilization:
+    python main.py --mode train --scenario 1 --episodes 10000 --num-envs 8 --device cuda
     
   See TRAINING_RECOMMENDATIONS.md for detailed episode recommendations.
 """
@@ -95,6 +98,10 @@ Examples:
     parser.add_argument("--video-fps", type=int, default=10,
                         help="Video frames per second")
     
+    # Parallel environment settings
+    parser.add_argument("--num-envs", type=int, default=1,
+                        help="Number of parallel environments (1=sequential, >1=parallel for GPU)")
+    
     # Other settings
     parser.add_argument("--device", type=str, default=None,
                         help="Device (cpu/cuda/auto). Default: auto-detect (CUDA if available)")
@@ -114,6 +121,12 @@ def run_train(args):
     
     exp_name = args.exp_name or f"scenario{args.scenario}"
     
+    # Auto-select num_envs based on device and scenario
+    num_envs = args.num_envs
+    if num_envs == 1 and args.device == "cuda":
+        # Suggest using parallel envs for GPU
+        print("💡 Tip: Use --num-envs 4 or --num-envs 8 with CUDA for faster training")
+    
     result = train(
         scenario=args.scenario,
         n_episodes=args.episodes,
@@ -131,7 +144,8 @@ def run_train(args):
         log_dir=args.results_dir,
         exp_name=exp_name,
         device=args.device,
-        seed=args.seed
+        seed=args.seed,
+        num_envs=num_envs
     )
     
     print(f"\nTraining completed!")

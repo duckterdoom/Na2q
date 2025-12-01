@@ -38,7 +38,10 @@ def verify_environment():
     # Test actions
     actions = [0, 1, 2, 0, 1]
     next_obs, reward, done, truncated, info = env1.step(actions)
-    assert reward >= 0 and reward <= 1.5, "Reward should be coverage rate (0-1) + bonus"
+    # Reward can be negative due to penalty for low coverage (<30%)
+    # Max reward: 1.0 (coverage) + 0.5 (full coverage bonus) = 1.5
+    # Min reward: 0.0 (coverage) - 0.1 (penalty) = -0.1
+    assert reward >= -0.1 and reward <= 1.5, f"Reward should be in range [-0.1, 1.5], got {reward}"
     assert info["coverage_rate"] >= 0 and info["coverage_rate"] <= 1.0, "Coverage should be 0-1"
     
     print("✓ Actions work correctly")

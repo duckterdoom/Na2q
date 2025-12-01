@@ -428,6 +428,54 @@ class NA2QAgent:
         
         return actions
     
+    def select_actions_batch(self, observations: np.ndarray, avail_actions: Optional[np.ndarray] = None,
+                             hidden_states: Optional[torch.Tensor] = None,
+                             evaluate: bool = False) -> Tuple[np.ndarray, torch.Tensor]:
+        """
+        Select actions for batch of environments using ε-greedy policy.
+        
+        Args:
+            observations: [batch_size, n_agents, obs_dim]
+            avail_actions: [batch_size, n_agents, n_actions] or None
+            hidden_states: [batch_size * n_agents, hidden_dim] or None
+            evaluate: If True, use greedy policy
+            
+        Returns:
+            actions: [batch_size, n_agents]
+            hidden_states: Updated hidden states
+        """
+        batch_size = observations.shape[0]
+        
+        with torch.no_grad():
+            obs_tensor = torch.FloatTensor(observations).to(self.device)  # [batch, n_agents, obs_dim]
+            
+            if hidden_states is None:
+                hidden_states = self.model.init_hidden(batch_size).to(self.device)
+            
+            q_values, hidden_states = self.model.get_q_values(obs_tensor, hidden_states)
+            # q_values: [batch, n_agents, n_actions]
+            
+            if avail_actions is not None:
+                avail_mask = torch.FloatTensor(avail_actions).to(self.device)
+                q_values[avail_mask == 0] = -float('inf')
+            
+            # ε-greedy action selection
+            if not evaluate and np.random.random() < self.epsilon:
+                # Random actions for exploration
+                if avail_actions is not None:
+                    actions = np.zeros((batch_size, self.n_agents), dtype=np.int64)
+                    for b in range(batch_size):
+                        for i in range(self.n_agents):
+                            avail = np.where(avail_actions[b, i] == 1)[0]
+                            actions[b, i] = np.random.choice(avail)
+                else:
+                    actions = np.random.randint(0, self.n_actions, (batch_size, self.n_agents))
+            else:
+                # Greedy actions
+                actions = q_values.argmax(dim=-1).cpu().numpy()
+        
+        return actions, hidden_states
+    
     def update_epsilon(self):
         """Update epsilon with linear decay based on training steps."""
         if self.train_step < self.epsilon_decay:
@@ -451,7 +499,9 @@ class NA2QAgent:
         
         batch_size = observations.size(0)
         seq_len = observations.size(1)
+        n_agents = self.n_agents
         
+        # Hidden states are per-agent: (batch_size * n_agents, hidden_dim)
         hidden = self.model.init_hidden(batch_size).to(self.device)
         target_hidden = self.target_model.init_hidden(batch_size).to(self.device)
         
@@ -469,7 +519,8 @@ class NA2QAgent:
                 done_t = torch.zeros(batch_size, device=self.device)
             
             # Reset hidden states for done episodes (at start of timestep)
-            # This resets based on done flag from previous timestep (if t > 0)
+            # Hidden states are (batch_size * n_agents, hidden_dim)
+            # Done flags are (batch_size,), need to expand to (batch_size * n_agents, hidden_dim)
             if t > 0:
                 # Get previous timestep's done flag
                 if dones.dim() == 2:
@@ -479,7 +530,10 @@ class NA2QAgent:
                 else:
                     prev_done = torch.zeros(batch_size, device=self.device)
                 
-                done_mask = prev_done.view(batch_size, 1).expand(batch_size, hidden.size(1))
+                # Expand done flag to match hidden state shape: (batch_size * n_agents, hidden_dim)
+                # Each agent in a done episode should have its hidden state reset
+                prev_done_expanded = prev_done.repeat_interleave(n_agents).view(batch_size * n_agents, 1)
+                done_mask = prev_done_expanded.expand(batch_size * n_agents, hidden.size(1))
                 hidden = hidden * (1 - done_mask.float())
                 target_hidden = target_hidden * (1 - done_mask.float())
             
@@ -511,7 +565,9 @@ class NA2QAgent:
                         next_avail = avail_actions
                 
                 # Reset target hidden for done episodes
-                done_mask_target = done_t.view(batch_size, 1).expand(batch_size, target_hidden.size(1))
+                # Expand done flag to match target_hidden shape: (batch_size * n_agents, hidden_dim)
+                done_t_expanded = done_t.repeat_interleave(n_agents).view(batch_size * n_agents, 1)
+                done_mask_target = done_t_expanded.expand(batch_size * n_agents, target_hidden.size(1))
                 target_hidden = target_hidden * (1 - done_mask_target.float())
                 
                 target_q_values, target_hidden = self.target_model.get_q_values(next_obs_t, target_hidden)

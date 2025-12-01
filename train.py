@@ -7,12 +7,18 @@ Based on paper hyperparameters (Table 3, Appendix F.3):
 - Episodes: varies by scenario
 - Epsilon: 1.0 → 0.05 over 50,000 steps
 - Target update: every 200 steps
+
+Supports parallel environments for GPU utilization:
+- Multiple environments run in parallel to avoid CPU bottleneck
+- Batch action selection for efficient GPU inference
+- Configurable number of parallel environments
 """
 
 import numpy as np
 from tqdm import tqdm
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Tuple
 import os
+import torch
 
 from environment import DSNEnv, make_env
 from model import NA2QAgent
@@ -56,6 +62,88 @@ def collect_episode(env: DSNEnv, agent: NA2QAgent, max_steps: int = 100) -> Dict
     return episode, info
 
 
+def collect_episodes_parallel(
+    parallel_env,
+    agent: NA2QAgent,
+    max_steps: int = 100
+) -> Tuple[List[Dict], List[dict]]:
+    """
+    Collect multiple episodes in parallel from vectorized environments.
+    
+    Args:
+        parallel_env: ParallelEnv instance with num_envs environments
+        agent: NA2QAgent for action selection
+        max_steps: Maximum steps per episode
+        
+    Returns:
+        episodes: List of episode dictionaries
+        final_infos: List of final info dictionaries
+    """
+    num_envs = parallel_env.num_envs
+    n_agents = parallel_env.n_agents
+    
+    # Reset all environments
+    observations, states, infos, avail_actions = parallel_env.reset()
+    
+    # Initialize hidden states for all environments
+    hidden_states = agent.model.init_hidden(num_envs).to(agent.device)
+    
+    # Initialize episode storage for each environment
+    episodes = [{
+        "observations": [], "actions": [], "rewards": [], "states": [],
+        "next_observations": [], "next_states": [], "dones": [], "avail_actions": []
+    } for _ in range(num_envs)]
+    
+    # Track which environments are done
+    dones = np.zeros(num_envs, dtype=bool)
+    final_infos = [None] * num_envs
+    
+    step = 0
+    while not all(dones) and step < max_steps:
+        # Select actions for all environments at once (batch inference)
+        actions, hidden_states = agent.select_actions_batch(
+            observations, avail_actions, hidden_states, evaluate=False
+        )
+        
+        # Step all environments
+        next_obs, next_states, rewards, terminateds, truncateds, infos, next_avail = parallel_env.step(actions)
+        
+        # Store transitions for each environment
+        for i in range(num_envs):
+            if not dones[i]:
+                episodes[i]["observations"].append(observations[i])
+                episodes[i]["actions"].append(actions[i])
+                episodes[i]["rewards"].append(rewards[i])
+                episodes[i]["states"].append(states[i])
+                episodes[i]["next_observations"].append(next_obs[i])
+                episodes[i]["next_states"].append(next_states[i])
+                episodes[i]["dones"].append(float(terminateds[i] or truncateds[i]))
+                episodes[i]["avail_actions"].append(avail_actions[i])
+                
+                # Check if this environment is done
+                if terminateds[i] or truncateds[i]:
+                    dones[i] = True
+                    final_infos[i] = infos[i]
+        
+        # Reset hidden states for done environments
+        done_mask = torch.FloatTensor(terminateds | truncateds).to(agent.device)
+        done_mask_expanded = done_mask.repeat_interleave(n_agents).view(num_envs * n_agents, 1)
+        hidden_states = hidden_states * (1 - done_mask_expanded)
+        
+        # Update for next step
+        observations = next_obs
+        states = next_states
+        avail_actions = next_avail
+        step += 1
+    
+    # Handle any environments that didn't finish
+    for i in range(num_envs):
+        if final_infos[i] is None:
+            final_infos[i] = infos[i]
+    
+    return episodes, final_infos
+
+
 def train(
     scenario: int = 1,
     n_episodes: int = 2000,
@@ -74,12 +162,35 @@ def train(
     exp_name: Optional[str] = None,
     device: Optional[str] = None,
     seed: int = 42,
+    num_envs: int = 1,  # Number of parallel environments
     **env_kwargs
 ) -> Dict:
     """
     Train NA²Q agent on DSN environment.
     
-    Returns training history and best model path.
+    Args:
+        scenario: DSN scenario (1 or 2)
+        n_episodes: Total number of episodes to train
+        max_steps: Maximum steps per episode
+        batch_size: Training batch size
+        buffer_capacity: Replay buffer capacity
+        lr: Learning rate
+        gamma: Discount factor
+        epsilon_start: Initial exploration rate
+        epsilon_end: Final exploration rate
+        epsilon_decay: Steps for epsilon decay
+        target_update_interval: Steps between target network updates
+        eval_interval: Episodes between evaluations
+        save_interval: Episodes between checkpoint saves
+        log_dir: Directory for logs
+        exp_name: Experiment name
+        device: Device to use (cuda/cpu/auto)
+        seed: Random seed
+        num_envs: Number of parallel environments (1 = sequential, >1 = parallel)
+        **env_kwargs: Additional environment arguments
+    
+    Returns:
+        Training history and best model path.
     """
     from utils import setup_experiment
     
@@ -91,35 +202,69 @@ def train(
     logger = Logger(exp_dir)
     tracker = MetricsTracker()
     
-    # Create environment
+    # Determine if using parallel environments
+    use_parallel = num_envs > 1 and device == "cuda"
+    
+    if use_parallel:
+        # Import parallel environment
+        from parallel_env import make_parallel_env
+        
+        # Create parallel environments
+        parallel_env = make_parallel_env(
+            num_envs=num_envs, scenario=scenario, max_steps=max_steps, seed=seed, **env_kwargs
+        )
+        
+        # Use first env for info
+        n_agents = parallel_env.n_agents
+        obs_dim = parallel_env.obs_dim
+        state_dim = parallel_env.state_dim
+        n_actions = parallel_env.n_actions
+        grid_size = parallel_env.grid_size
+        n_sensors = parallel_env.n_sensors
+        n_targets = parallel_env.n_targets
+    else:
+        parallel_env = None
+        num_envs = 1
+    
+    # Create single environment (for sequential training or evaluation)
     env = make_env(scenario=scenario, max_steps=max_steps, seed=seed, **env_kwargs)
     eval_env = make_env(scenario=scenario, max_steps=max_steps, seed=seed + 1000, **env_kwargs)
     
+    if not use_parallel:
+        n_agents = env.n_sensors
+        obs_dim = env.obs_dim
+        state_dim = env.state_dim
+        n_actions = env.n_actions
+        grid_size = env.grid_size
+        n_sensors = env.n_sensors
+        n_targets = env.n_targets
+    
     print(f"Training NA²Q on Scenario {scenario}")
-    print(f"  Grid: {env.grid_size}×{env.grid_size}")
-    print(f"  Sensors: {env.n_sensors}, Targets: {env.n_targets}")
-    print(f"  Obs dim: {env.obs_dim}, State dim: {env.state_dim}")
+    print(f"  Grid: {grid_size}×{grid_size}")
+    print(f"  Sensors: {n_sensors}, Targets: {n_targets}")
+    print(f"  Obs dim: {obs_dim}, State dim: {state_dim}")
     print(f"  Device: {device}")
+    print(f"  Parallel envs: {num_envs}" + (" (GPU optimized)" if use_parallel else " (sequential)"))
     if device == "cuda":
-        import torch
         print(f"  CUDA Device: {torch.cuda.get_device_name(0)}")
     print(f"  Experiment dir: {exp_dir}")
     
     # Create agent
     agent = NA2QAgent(
-        n_agents=env.n_sensors, obs_dim=env.obs_dim, state_dim=env.state_dim,
-        n_actions=env.n_actions, lr=lr, gamma=gamma, epsilon_start=epsilon_start,
+        n_agents=n_agents, obs_dim=obs_dim, state_dim=state_dim,
+        n_actions=n_actions, lr=lr, gamma=gamma, epsilon_start=epsilon_start,
         epsilon_end=epsilon_end, epsilon_decay=epsilon_decay,
         target_update_interval=target_update_interval, device=device
     )
     
-    # Create replay buffer
+    # Create replay buffer (increase capacity for parallel envs)
+    effective_buffer_capacity = buffer_capacity * max(1, num_envs // 2)
     buffer = EpisodeReplayBuffer(
-        capacity=buffer_capacity,
-        n_agents=env.n_sensors,
-        obs_dim=env.obs_dim,
-        state_dim=env.state_dim,
-        n_actions=env.n_actions,
+        capacity=effective_buffer_capacity,
+        n_agents=n_agents,
+        obs_dim=obs_dim,
+        state_dim=state_dim,
+        n_actions=n_actions,
         max_episode_length=max_steps
     )
     
@@ -130,21 +275,63 @@ def train(
     # For long training runs, periodically save history to disk
     history_save_interval = min(1000, n_episodes // 10) if n_episodes > 2000 else n_episodes
     
-    pbar = tqdm(range(1, n_episodes + 1), desc="Training")
+    # Adjust for parallel environments
+    episodes_per_iteration = num_envs if use_parallel else 1
+    n_iterations = (n_episodes + episodes_per_iteration - 1) // episodes_per_iteration
     
-    for episode_num in pbar:
-        # Collect episode
-        episode, info = collect_episode(env, agent, max_steps)
-        episode_reward = sum(episode["rewards"])
-        coverage_rate = info.get("coverage_rate", 0)
-        
-        buffer.add_episode(episode)
+    pbar = tqdm(range(1, n_iterations + 1), desc="Training")
+    total_episodes = 0
+    
+    for iteration in pbar:
+        # Collect episode(s)
+        if use_parallel:
+            # Collect multiple episodes in parallel
+            episodes_list, infos_list = collect_episodes_parallel(parallel_env, agent, max_steps)
+            
+            # Process each collected episode
+            for ep_idx, (episode, info) in enumerate(zip(episodes_list, infos_list)):
+                if len(episode["rewards"]) == 0:
+                    continue
+                    
+                total_episodes += 1
+                episode_reward = sum(episode["rewards"])
+                coverage_rate = info.get("coverage_rate", 0)
+                
+                buffer.add_episode(episode)
+                
+                # Track metrics
+                tracker.add("reward", episode_reward)
+                tracker.add("coverage", coverage_rate)
+                training_history["episode_rewards"].append(episode_reward)
+                training_history["coverage_rates"].append(coverage_rate)
+            
+            # Use last episode's info for logging
+            episode_reward = sum(episodes_list[-1]["rewards"]) if episodes_list[-1]["rewards"] else 0
+            coverage_rate = infos_list[-1].get("coverage_rate", 0) if infos_list[-1] else 0
+        else:
+            # Sequential episode collection
+            episode, info = collect_episode(env, agent, max_steps)
+            total_episodes += 1
+            episode_reward = sum(episode["rewards"])
+            coverage_rate = info.get("coverage_rate", 0)
+            
+            buffer.add_episode(episode)
+            
+            # Track metrics
+            tracker.add("reward", episode_reward)
+            tracker.add("coverage", coverage_rate)
+            training_history["episode_rewards"].append(episode_reward)
+            training_history["coverage_rates"].append(coverage_rate)
         
         # Train if enough samples
-        # For better learning, do multiple updates per episode after initial exploration
+        # For better learning, do multiple updates per iteration
+        # More updates when using parallel envs (more data collected)
         loss = 0.0
         if buffer.can_sample(batch_size):
-            n_updates = 1 if episode_num < 100 else 2  # More updates after initial exploration
+            # Scale updates with parallel envs for better GPU utilization
+            base_updates = 1 if total_episodes < 100 else 2
+            n_updates = base_updates * max(1, num_envs // 2) if use_parallel else base_updates
+            
             total_loss = 0.0
             total_td_loss = 0.0
             total_vae_loss = 0.0
@@ -169,35 +356,32 @@ def train(
             }, agent.train_step)
         
         # Log episode metrics
-        tracker.add("reward", episode_reward)
-        tracker.add("coverage", coverage_rate)
         tracker.add("loss", loss)
-        
-        training_history["episode_rewards"].append(episode_reward)
-        training_history["coverage_rates"].append(coverage_rate)
         training_history["losses"].append(loss)
         
         logger.log_scalars({
             "episode/reward": episode_reward,
             "episode/coverage_rate": coverage_rate,
             "episode/avg_reward": tracker.get_mean("reward"),
-            "episode/avg_coverage": tracker.get_mean("coverage")
-        }, episode_num)
+            "episode/avg_coverage": tracker.get_mean("coverage"),
+            "episode/total_episodes": total_episodes
+        }, total_episodes)
         
-        logger.log_episode(episode_num, {
+        logger.log_episode(total_episodes, {
             "reward": episode_reward,
             "coverage": coverage_rate, "loss": loss
         })
         
         # Update progress bar
         pbar.set_postfix({
+            "Eps": total_episodes,
             "R": f"{tracker.get_mean('reward'):.2f}",
             "C": f"{tracker.get_mean('coverage'):.1%}",
             "ε": f"{agent.epsilon:.3f}"
         })
         
-        # Evaluation
-        if episode_num % eval_interval == 0:
+        # Evaluation (based on total episodes)
+        if total_episodes % eval_interval == 0 and total_episodes > 0:
             eval_rewards, eval_coverages = evaluate(eval_env, agent, n_episodes=5)
             avg_eval_reward = np.mean(eval_rewards)
             avg_eval_coverage = np.mean(eval_coverages)
@@ -207,9 +391,9 @@ def train(
                 "eval/reward_std": np.std(eval_rewards),
                 "eval/coverage_mean": avg_eval_coverage,
                 "eval/coverage_std": np.std(eval_coverages)
-            }, episode_num)
+            }, total_episodes)
             
-            print(f"\n[Eval] Episode {episode_num}: Reward={avg_eval_reward:.3f}, Coverage={avg_eval_coverage:.1%}")
+            print(f"\n[Eval] Episode {total_episodes}: Reward={avg_eval_reward:.3f}, Coverage={avg_eval_coverage:.1%}")
             
             # Save best model
             if avg_eval_reward > best_eval_reward:
@@ -218,8 +402,8 @@ def train(
                 print(f"  → New best model saved!")
         
         # Save checkpoint
-        if episode_num % save_interval == 0:
-            checkpoint_path = os.path.join(exp_dir, "checkpoints", f"checkpoint_{episode_num}.pt")
+        if total_episodes % save_interval == 0 and total_episodes > 0:
+            checkpoint_path = os.path.join(exp_dir, "checkpoints", f"checkpoint_{total_episodes}.pt")
             agent.save(checkpoint_path)
             
             # Keep only last 10 checkpoints to save disk space for long runs
@@ -236,13 +420,17 @@ def train(
                             pass
         
         # Periodically save training history to disk for long runs
-        if episode_num % history_save_interval == 0 and episode_num > 0:
+        if total_episodes % history_save_interval == 0 and total_episodes > 0:
             np.savez(
-                os.path.join(exp_dir, f"training_history_ep{episode_num}.npz"),
+                os.path.join(exp_dir, f"training_history_ep{total_episodes}.npz"),
                 episode_rewards=np.array(training_history["episode_rewards"]),
                 coverage_rates=np.array(training_history["coverage_rates"]),
                 losses=np.array(training_history["losses"])
             )
+        
+        # Check if we've reached the target number of episodes
+        if total_episodes >= n_episodes:
+            break
     
     # Final save
     agent.save(os.path.join(exp_dir, "checkpoints", "final_model.pt"))
@@ -269,11 +457,16 @@ def train(
     env.close()
     eval_env.close()
     
+    # Close parallel environments if used
+    if use_parallel and parallel_env is not None:
+        parallel_env.close()
+    
     return {
         "exp_dir": exp_dir,
         "best_model_path": os.path.join(exp_dir, "checkpoints", "best_model.pt"),
         "training_history": training_history,
-        "best_eval_reward": best_eval_reward
+        "best_eval_reward": best_eval_reward,
+        "total_episodes": total_episodes
     }
 
 
