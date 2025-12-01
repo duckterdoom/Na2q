@@ -150,13 +150,23 @@ def run_train(args):
     
     print(f"\nTraining completed!")
     print(f"  Best model: {result['best_model_path']}")
-    print(f"  Best eval reward: {result['best_eval_reward']:.3f}")
+    if result['best_eval_reward'] != -float('inf'):
+        print(f"  Best eval reward: {result['best_eval_reward']:.3f}")
+    else:
+        print(f"  Best eval reward: (using final model)")
     
     # Copy best model to trainedModel/
     import shutil
     os.makedirs("trainedModel", exist_ok=True)
     best_model_dest = f"trainedModel/scenario{args.scenario}_best.pt"
-    shutil.copy(result['best_model_path'], best_model_dest)
+    
+    # Use best_model if it exists, otherwise use final_model
+    if os.path.exists(result['best_model_path']):
+        shutil.copy(result['best_model_path'], best_model_dest)
+    else:
+        final_model_path = result['best_model_path'].replace('best_model.pt', 'final_model.pt')
+        if os.path.exists(final_model_path):
+            shutil.copy(final_model_path, best_model_dest)
     print(f"  Copied to: {best_model_dest}")
     
     # Generate visualizations

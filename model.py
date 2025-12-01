@@ -389,6 +389,7 @@ class NA2QAgent:
         self.vae_optimizer = torch.optim.Adam(vae_params, lr=lr, betas=(0.9, 0.999))
         
         # Learning rate schedulers for long training
+        # Step every training step, decay LR by 0.5 every 5000 steps
         self.q_scheduler = torch.optim.lr_scheduler.StepLR(self.q_optimizer, step_size=5000, gamma=0.5)
         self.vae_scheduler = torch.optim.lr_scheduler.StepLR(self.vae_optimizer, step_size=5000, gamma=0.5)
         
@@ -613,10 +614,10 @@ class NA2QAgent:
         if self.train_step % self.target_update_interval == 0:
             self.update_target()
         
-        # Update learning rate schedulers (for long training)
-        if self.train_step % 100 == 0:  # Update every 100 steps
-            self.q_scheduler.step()
-            self.vae_scheduler.step()
+        # Update learning rate schedulers (every training step)
+        # StepLR with step_size=5000 means LR decays every 5000 calls to .step()
+        self.q_scheduler.step()
+        self.vae_scheduler.step()
         
         self.update_epsilon()
         

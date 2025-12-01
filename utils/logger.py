@@ -16,7 +16,8 @@ except ImportError:
 class Logger:
     """Logger for training metrics and experiment tracking."""
     
-    def __init__(self, log_dir: str = "logs", experiment_name: Optional[str] = None, use_tensorboard: bool = True):
+    def __init__(self, log_dir: str = "logs", experiment_name: Optional[str] = None, 
+                 use_tensorboard: bool = True, max_history_size: int = 10000):
         if experiment_name is None:
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             experiment_name = f"na2q_dsn_{timestamp}"
@@ -34,6 +35,7 @@ class Logger:
         self.metrics_history = {}
         self.episode_metrics = []
         self.log_file = os.path.join(self.log_dir, "training.log")
+        self.max_history_size = max_history_size  # Limit memory for long training
     
     def log_scalar(self, name: str, value: float, step: int):
         if self.use_tensorboard:
@@ -41,6 +43,10 @@ class Logger:
         if name not in self.metrics_history:
             self.metrics_history[name] = []
         self.metrics_history[name].append((step, value))
+        
+        # Trim history to prevent memory accumulation for long training runs
+        if len(self.metrics_history[name]) > self.max_history_size:
+            self.metrics_history[name] = self.metrics_history[name][-self.max_history_size:]
     
     def log_scalars(self, metrics: Dict[str, float], step: int, prefix: str = ""):
         for name, value in metrics.items():
@@ -50,6 +56,10 @@ class Logger:
     def log_episode(self, episode: int, metrics: Dict[str, Any]):
         metrics["episode"] = episode
         self.episode_metrics.append(metrics)
+        
+        # Trim episode metrics to prevent memory accumulation
+        if len(self.episode_metrics) > self.max_history_size:
+            self.episode_metrics = self.episode_metrics[-self.max_history_size:]
         
         for name, value in metrics.items():
             if isinstance(value, (int, float)):
@@ -117,6 +127,7 @@ class MetricsTracker:
     
     def reset(self):
         self.metrics = {}
+
 
 
 

@@ -281,6 +281,8 @@ def train(
     
     pbar = tqdm(range(1, n_iterations + 1), desc="Training")
     total_episodes = 0
+    last_eval_episode = 0  # Track last evaluation to handle parallel env jumps
+    last_save_episode = 0  # Track last save to handle parallel env jumps
     
     for iteration in pbar:
         # Collect episode(s)
@@ -357,7 +359,15 @@ def train(
         
         # Log episode metrics
         tracker.add("loss", loss)
-        training_history["losses"].append(loss)
+        
+        # For parallel envs, replicate loss for each episode in the batch
+        if use_parallel:
+            # Add loss for each episode collected in this iteration
+            n_episodes_this_iter = sum(1 for ep in episodes_list if len(ep["rewards"]) > 0)
+            for _ in range(n_episodes_this_iter):
+                training_history["losses"].append(loss)
+        else:
+            training_history["losses"].append(loss)
         
         logger.log_scalars({
             "episode/reward": episode_reward,
@@ -380,8 +390,9 @@ def train(
             "ε": f"{agent.epsilon:.3f}"
         })
         
-        # Evaluation (based on total episodes)
-        if total_episodes % eval_interval == 0 and total_episodes > 0:
+        # Evaluation (based on total episodes) - handle parallel env jumps
+        if total_episodes >= last_eval_episode + eval_interval:
+            last_eval_episode = total_episodes
             eval_rewards, eval_coverages = evaluate(eval_env, agent, n_episodes=5)
             avg_eval_reward = np.mean(eval_rewards)
             avg_eval_coverage = np.mean(eval_coverages)
@@ -401,8 +412,9 @@ def train(
                 agent.save(os.path.join(exp_dir, "checkpoints", "best_model.pt"))
                 print(f"  → New best model saved!")
         
-        # Save checkpoint
-        if total_episodes % save_interval == 0 and total_episodes > 0:
+        # Save checkpoint - handle parallel env jumps
+        if total_episodes >= last_save_episode + save_interval:
+            last_save_episode = total_episodes
             checkpoint_path = os.path.join(exp_dir, "checkpoints", f"checkpoint_{total_episodes}.pt")
             agent.save(checkpoint_path)
             
@@ -428,12 +440,25 @@ def train(
                 losses=np.array(training_history["losses"])
             )
         
+        # Periodic GPU memory cleanup for long training runs
+        if device == "cuda" and total_episodes % 1000 == 0 and total_episodes > 0:
+            torch.cuda.empty_cache()
+        
         # Check if we've reached the target number of episodes
         if total_episodes >= n_episodes:
             break
     
     # Final save
-    agent.save(os.path.join(exp_dir, "checkpoints", "final_model.pt"))
+    final_model_path = os.path.join(exp_dir, "checkpoints", "final_model.pt")
+    best_model_path = os.path.join(exp_dir, "checkpoints", "best_model.pt")
+    agent.save(final_model_path)
+    
+    # Ensure best_model.pt exists - if no evaluation improved, use final model
+    if not os.path.exists(best_model_path):
+        import shutil
+        shutil.copy(final_model_path, best_model_path)
+        print(f"  Note: Using final model as best model (no improvement during eval)")
+    
     logger.save_metrics()
     logger.close()
     
