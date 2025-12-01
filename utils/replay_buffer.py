@@ -43,7 +43,14 @@ class EpisodeReplayBuffer:
             self.current_episode = {k: [] for k in self.current_episode.keys()}
     
     def sample(self, batch_size: int) -> Dict[str, np.ndarray]:
-        indices = np.random.choice(len(self.episodes), min(batch_size, len(self.episodes)), replace=False)
+        """Sample batch of episodes with proper padding and diversity."""
+        n_available = len(self.episodes)
+        if n_available == 0:
+            raise ValueError("Cannot sample from empty buffer")
+        
+        # Sample with replacement if needed for diversity
+        replace = batch_size > n_available
+        indices = np.random.choice(n_available, min(batch_size, n_available), replace=replace)
         
         batch = {k: [] for k in ["observations", "actions", "rewards", "states",
                                  "next_observations", "next_states", "dones", "avail_actions"]}
@@ -52,17 +59,20 @@ class EpisodeReplayBuffer:
             episode = self.episodes[idx]
             ep_len = len(episode["observations"])
             
+            # Sample a chunk from the episode
             if ep_len <= self.chunk_length:
                 start_idx = 0
+                end_idx = ep_len
             else:
                 start_idx = np.random.randint(0, ep_len - self.chunk_length + 1)
-            
-            end_idx = min(start_idx + self.chunk_length, ep_len)
+                end_idx = start_idx + self.chunk_length
             
             for key in batch.keys():
-                batch[key].append(episode[key][start_idx:end_idx])
+                chunk = episode[key][start_idx:end_idx]
+                batch[key].append(chunk)
         
-        max_len = max(len(b) for b in batch["observations"])
+        # Pad sequences to same length
+        max_len = max(len(b) for b in batch["observations"]) if batch["observations"] else self.chunk_length
         
         for key in batch.keys():
             padded = []

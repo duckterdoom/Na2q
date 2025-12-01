@@ -385,8 +385,12 @@ class NA2QAgent:
         q_params = list(self.model.agent_q_network.parameters()) + list(self.model.mixer.parameters())
         vae_params = list(self.model.semantics_encoder.parameters())
         
-        self.q_optimizer = torch.optim.RMSprop(q_params, lr=lr)
-        self.vae_optimizer = torch.optim.Adam(vae_params, lr=lr)
+        self.q_optimizer = torch.optim.RMSprop(q_params, lr=lr, alpha=0.99, eps=1e-5)
+        self.vae_optimizer = torch.optim.Adam(vae_params, lr=lr, betas=(0.9, 0.999))
+        
+        # Learning rate schedulers for long training
+        self.q_scheduler = torch.optim.lr_scheduler.StepLR(self.q_optimizer, step_size=5000, gamma=0.5)
+        self.vae_scheduler = torch.optim.lr_scheduler.StepLR(self.vae_optimizer, step_size=5000, gamma=0.5)
         
         self.train_step = 0
         self.hidden_states = None
@@ -425,7 +429,11 @@ class NA2QAgent:
         return actions
     
     def update_epsilon(self):
-        self.epsilon = max(self.epsilon_end, self.epsilon - (1.0 - self.epsilon_end) / self.epsilon_decay)
+        """Update epsilon with linear decay based on training steps."""
+        if self.train_step < self.epsilon_decay:
+            self.epsilon = self.epsilon_end + (1.0 - self.epsilon_end) * (1.0 - self.train_step / self.epsilon_decay)
+        else:
+            self.epsilon = self.epsilon_end
     
     def update_target(self):
         self.target_model.load_state_dict(self.model.state_dict())
@@ -451,23 +459,89 @@ class NA2QAgent:
         
         for t in range(seq_len):
             obs_t, state_t, actions_t = observations[:, t], states[:, t], actions[:, t]
+            
+            # Get done flags - dones come as [batch, seq] from replay buffer
+            if dones.dim() == 2:  # [batch, seq]
+                done_t = dones[:, t]
+            elif dones.dim() == 1:  # [seq] - single episode
+                done_t = dones[t].expand(batch_size) if batch_size > 1 else dones[t]
+            else:  # scalar or unexpected
+                done_t = torch.zeros(batch_size, device=self.device)
+            
+            # Reset hidden states for done episodes (at start of timestep)
+            # This resets based on done flag from previous timestep (if t > 0)
+            if t > 0:
+                # Get previous timestep's done flag
+                if dones.dim() == 2:
+                    prev_done = dones[:, t - 1]
+                elif dones.dim() == 1:
+                    prev_done = dones[t - 1].expand(batch_size) if batch_size > 1 else dones[t - 1]
+                else:
+                    prev_done = torch.zeros(batch_size, device=self.device)
+                
+                done_mask = prev_done.view(batch_size, 1).expand(batch_size, hidden.size(1))
+                hidden = hidden * (1 - done_mask.float())
+                target_hidden = target_hidden * (1 - done_mask.float())
+            
             result = self.model(obs_t, hidden, state_t, actions_t)
             q_totals.append(result['q_total'])
             vae_losses.append(result['vae_loss'])
             hidden = result['hidden_states']
             
             with torch.no_grad():
-                next_obs_t, next_state_t, next_avail = next_observations[:, t], next_states[:, t], avail_actions[:, t]
+                # Use next timestep's observations and states
+                if t < seq_len - 1:
+                    next_obs_t = next_observations[:, t]
+                    next_state_t = next_states[:, t]
+                    if avail_actions.dim() == 3:
+                        next_avail = avail_actions[:, t]
+                    elif avail_actions.dim() == 2:
+                        next_avail = avail_actions
+                    else:
+                        next_avail = avail_actions
+                else:
+                    # Last timestep: use the last next_obs/next_state
+                    next_obs_t = next_observations[:, -1]
+                    next_state_t = next_states[:, -1]
+                    if avail_actions.dim() == 3:
+                        next_avail = avail_actions[:, -1]
+                    elif avail_actions.dim() == 2:
+                        next_avail = avail_actions
+                    else:
+                        next_avail = avail_actions
+                
+                # Reset target hidden for done episodes
+                done_mask_target = done_t.view(batch_size, 1).expand(batch_size, target_hidden.size(1))
+                target_hidden = target_hidden * (1 - done_mask_target.float())
+                
                 target_q_values, target_hidden = self.target_model.get_q_values(next_obs_t, target_hidden)
-                target_q_values[next_avail == 0] = -float('inf')
+                # Mask unavailable actions
+                if next_avail.dim() == 2:
+                    target_q_values[next_avail == 0] = -float('inf')
                 next_actions = target_q_values.argmax(dim=-1)
                 target_result = self.target_model(next_obs_t, target_hidden, next_state_t, next_actions)
                 target_q_totals.append(target_result['q_total'])
+                target_hidden = target_result['hidden_states']
         
-        q_totals = torch.stack(q_totals, dim=1).squeeze(-1)
-        target_q_totals = torch.stack(target_q_totals, dim=1).squeeze(-1)
+        q_totals = torch.stack(q_totals, dim=1).squeeze(-1)  # [batch, seq]
+        target_q_totals = torch.stack(target_q_totals, dim=1).squeeze(-1)  # [batch, seq]
         vae_loss = torch.stack(vae_losses).mean()
         
+        # Handle rewards and dones - they come as [batch, seq] from replay buffer
+        # Ensure they're 2D: [batch, seq]
+        if rewards.dim() == 1:
+            rewards = rewards.unsqueeze(0)  # [1, seq]
+        if dones.dim() == 1:
+            dones = dones.unsqueeze(0)  # [1, seq]
+        
+        # Ensure batch dimensions match
+        if rewards.size(0) != target_q_totals.size(0):
+            if rewards.size(0) == 1:
+                rewards = rewards.expand(target_q_totals.size(0), -1)
+            if dones.size(0) == 1:
+                dones = dones.expand(target_q_totals.size(0), -1)
+        
+        # Compute targets: r + γ * (1 - done) * Q_target
         targets = rewards + self.gamma * (1 - dones) * target_q_totals
         td_loss = F.mse_loss(q_totals, targets.detach())
         total_loss = td_loss + self.vae_loss_weight * vae_loss
@@ -483,12 +557,19 @@ class NA2QAgent:
         if self.train_step % self.target_update_interval == 0:
             self.update_target()
         
+        # Update learning rate schedulers (for long training)
+        if self.train_step % 100 == 0:  # Update every 100 steps
+            self.q_scheduler.step()
+            self.vae_scheduler.step()
+        
         self.update_epsilon()
         
         return {
             "loss": total_loss.item(), "td_loss": td_loss.item(),
             "vae_loss": vae_loss.item(), "q_total_mean": q_totals.mean().item(),
-            "epsilon": self.epsilon
+            "epsilon": self.epsilon,
+            "q_lr": self.q_optimizer.param_groups[0]['lr'],
+            "vae_lr": self.vae_optimizer.param_groups[0]['lr']
         }
     
     def save(self, path: str):
@@ -531,5 +612,7 @@ class NA2QAgent:
                 'masks': result['masks'].squeeze(0).cpu().numpy(),
                 'q_total': result['q_total'].squeeze().cpu().numpy()
             }
+
+
 
 

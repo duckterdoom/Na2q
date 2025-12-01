@@ -263,14 +263,32 @@ class DSNEnv(gym.Env):
                     self.goal_map[i, j] = 1
     
     def _calculate_reward(self) -> Tuple[float, dict]:
-        """Calculate team reward: maximize number of tracked targets."""
+        """
+        Calculate team reward: maximize number of tracked targets.
+        
+        Improved reward shaping for better learning signal:
+        - Base reward: coverage rate (0-1)
+        - Bonus for full coverage
+        - Incremental reward for maintaining/improving coverage
+        """
         targets_tracked = np.any(self.goal_map, axis=0)
         n_tracked = np.sum(targets_tracked)
         coverage_rate = n_tracked / self.n_targets
+        
+        # Base reward: coverage rate
         reward = coverage_rate
         
+        # Bonus for full coverage (encourages complete tracking)
         if n_tracked == self.n_targets:
-            reward += 0.5  # Bonus for full coverage
+            reward += 0.5
+        
+        # Small bonus for high coverage (encourages improvement)
+        if coverage_rate >= 0.8:
+            reward += 0.1
+        
+        # Penalty for very low coverage (encourages exploration)
+        if coverage_rate < 0.3:
+            reward -= 0.1
         
         info = {"n_tracked": n_tracked, "coverage_rate": coverage_rate, "goal_map": self.goal_map.copy()}
         return reward, info

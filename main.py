@@ -20,20 +20,25 @@ def parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  Training Scenario 1 (small-scale):
+  Training Scenario 1 (small-scale, best results):
+    python main.py --mode train --scenario 1 --episodes 10000
+    
+  Training Scenario 2 (large-scale, best results):
+    python main.py --mode train --scenario 2 --episodes 20000
+    
+  Quick training (testing):
     python main.py --mode train --scenario 1 --episodes 2000
     
-  Training Scenario 2 (large-scale):
-    python main.py --mode train --scenario 2 --episodes 5000
-    
   Testing with trained model:
-    python main.py --mode test --scenario 1 --model trainedModel/best_model.pt
+    python main.py --mode test --scenario 1 --model trainedModel/scenario1_best.pt
     
   Generate video:
-    python main.py --mode video --scenario 1 --model trainedModel/best_model.pt
+    python main.py --mode video --scenario 1 --model trainedModel/scenario1_best.pt
     
   Quick test:
     python main.py --mode quick-test
+    
+  See TRAINING_RECOMMENDATIONS.md for detailed episode recommendations.
 """
     )
     
@@ -50,7 +55,7 @@ Examples:
     
     # Training settings (from paper Table 3)
     parser.add_argument("--episodes", type=int, default=2000,
-                        help="Number of training episodes")
+                        help="Number of training episodes (recommended: 10000 for Scenario 1, 20000 for Scenario 2)")
     parser.add_argument("--batch-size", type=int, default=32,
                         help="Batch size for training")
     parser.add_argument("--lr", type=float, default=5e-4,

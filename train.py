@@ -141,18 +141,31 @@ def train(
         buffer.add_episode(episode)
         
         # Train if enough samples
+        # For better learning, do multiple updates per episode after initial exploration
         loss = 0.0
         if buffer.can_sample(batch_size):
-            batch = buffer.sample(batch_size)
-            train_info = agent.train_step_fn(batch)
-            loss = train_info["loss"]
+            n_updates = 1 if episode_num < 100 else 2  # More updates after initial exploration
+            total_loss = 0.0
+            total_td_loss = 0.0
+            total_vae_loss = 0.0
+            total_q_total = 0.0
             
+            for _ in range(n_updates):
+                batch = buffer.sample(batch_size)
+                train_info = agent.train_step_fn(batch)
+                total_loss += train_info["loss"]
+                total_td_loss += train_info["td_loss"]
+                total_vae_loss += train_info["vae_loss"]
+                total_q_total += train_info["q_total_mean"]
+            
+            # Average over updates
+            loss = total_loss / n_updates
             logger.log_scalars({
                 "train/loss": loss,
-                "train/td_loss": train_info["td_loss"],
-                "train/vae_loss": train_info["vae_loss"],
+                "train/td_loss": total_td_loss / n_updates,
+                "train/vae_loss": total_vae_loss / n_updates,
                 "train/epsilon": train_info["epsilon"],
-                "train/q_total": train_info["q_total_mean"]
+                "train/q_total": total_q_total / n_updates
             }, agent.train_step)
         
         # Log episode metrics
