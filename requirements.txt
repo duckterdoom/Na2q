@@ -1,0 +1,25 @@
+# NA²Q: Neural Attention Additive Q-Learning for DSN
+# Based on ICML 2023 paper and HiT-MAC structure
+
+# Core dependencies
+torch>=1.10.0
+numpy>=1.21.0
+gymnasium>=0.28.0
+
+# Visualization
+matplotlib>=3.4.0
+imageio>=2.19.0
+imageio-ffmpeg>=0.4.7
+
+# Training utilities
+tensorboard>=2.8.0
+tqdm>=4.62.0
+
+# Configuration
+pyyaml>=5.4.0
+
+# Numerical
+scipy>=1.7.0
+
+# Optional: For reading .docx files
+python-docx>=0.8.11
