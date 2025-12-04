@@ -487,13 +487,13 @@ class NA2QAgent:
     """
     NA²Q Agent for training and inference.
     
-    Training settings (from paper Table 3 & Appendix F.3, with stability improvements):
-    - Learning rate: 0.0005
+    Training settings (from paper Table 3 & Appendix F.3):
+    - Learning rate: 0.0005 (RMSprop for Q, Adam for VAE)
     - Batch size: 32
-    - Discount γ: 0.97 (reduced from 0.99 for stability)
-    - Epsilon: 1.0 → 0.05 over 50,000 steps
-    - Target update: Soft update with τ=0.005 (Polyak averaging)
-    - VAE β: 0.1 (with warmup period)
+    - Discount γ: 0.99 (from paper Table 3)
+    - Epsilon: 1.0 → 0.05 over 50,000 steps (from paper)
+    - Target update: 200 steps (soft update τ=0.01 for stability)
+    - VAE β: 0.1 (from paper)
     - Optimizers: RMSprop (Q), Adam (VAE)
     
     Stability Improvements:
@@ -506,8 +506,8 @@ class NA2QAgent:
     def __init__(self, n_agents: int, obs_dim: int, state_dim: int, n_actions: int,
                  hidden_dim: int = 64, rnn_hidden_dim: int = 64, semantic_hidden_dim: int = 32,
                  latent_dim: int = 16, attention_hidden_dim: int = 64, lr: float = 5e-4,
-                 gamma: float = 0.97, epsilon_start: float = 1.0, epsilon_end: float = 0.05,
-                 epsilon_decay: int = 20000, target_update_interval: int = 200,  # Reduced from 50000 for faster decay
+                 gamma: float = 0.99, epsilon_start: float = 1.0, epsilon_end: float = 0.05,
+                 epsilon_decay: int = 50000, target_update_interval: int = 200,  # From paper: 50k steps, 200 step updates
                  vae_loss_weight: float = 0.1, device: str = "cpu"):
         
         self.n_agents = n_agents
@@ -535,16 +535,16 @@ class NA2QAgent:
         q_params = list(self.model.agent_q_network.parameters()) + list(self.model.mixer.parameters())
         vae_params = list(self.model.semantics_encoder.parameters())
         
-        # Balanced learning rate for better performance (0.0005 -> 0.00035)
-        # Increased from 0.0002 to allow faster learning while maintaining stability
-        balanced_lr = lr * 0.7  # 70% of original (0.00035 instead of 0.0002)
-        self.q_optimizer = torch.optim.RMSprop(q_params, lr=balanced_lr, alpha=0.99, eps=1e-5)
-        self.vae_optimizer = torch.optim.Adam(vae_params, lr=balanced_lr, betas=(0.9, 0.999))
+        # Learning rate from paper: 0.0005 (Table 3)
+        # Using paper value for exact match with NA2Q framework
+        self.q_optimizer = torch.optim.RMSprop(q_params, lr=lr, alpha=0.99, eps=1e-5)
+        self.vae_optimizer = torch.optim.Adam(vae_params, lr=lr, betas=(0.9, 0.999))
         
-        # Learning rate schedulers for long training
-        # Less aggressive decay: reduce by 10% every 5000 steps to maintain learning capacity
-        self.q_scheduler = torch.optim.lr_scheduler.StepLR(self.q_optimizer, step_size=5000, gamma=0.9)
-        self.vae_scheduler = torch.optim.lr_scheduler.StepLR(self.vae_optimizer, step_size=5000, gamma=0.9)
+        # Learning rate schedulers for long training (30k episodes)
+        # Gentle decay: reduce by 10% every 10000 steps to maintain learning capacity
+        # This helps with very long training runs without being too aggressive
+        self.q_scheduler = torch.optim.lr_scheduler.StepLR(self.q_optimizer, step_size=10000, gamma=0.9)
+        self.vae_scheduler = torch.optim.lr_scheduler.StepLR(self.vae_optimizer, step_size=10000, gamma=0.9)
         
         self.train_step = 0
         self.hidden_states = None

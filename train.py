@@ -151,10 +151,10 @@ def train(
     batch_size: int = 32,
     buffer_capacity: int = 5000,
     lr: float = 5e-4,
-    gamma: float = 0.97,
+    gamma: float = 0.99,  # From paper Table 3
     epsilon_start: float = 1.0,
     epsilon_end: float = 0.05,
-    epsilon_decay: int = 20000,  # Reduced from 50000 for faster exploration decay
+    epsilon_decay: int = 50000,  # From paper: 50,000 steps for epsilon decay
     target_update_interval: int = 200,
     eval_interval: int = 50,
     save_interval: int = 100,
@@ -272,8 +272,9 @@ def train(
     best_eval_reward = -float('inf')
     training_history = {"episode_rewards": [], "coverage_rates": [], "losses": []}
     
-    # For long training runs, periodically save history to disk
-    history_save_interval = min(1000, n_episodes // 10) if n_episodes > 2000 else n_episodes
+    # For long training runs (30k episodes), periodically save history to disk
+    # Saves every 1000 episodes to prevent memory issues and allow recovery
+    history_save_interval = 1000 if n_episodes > 2000 else n_episodes
     
     # Adjust for parallel environments
     episodes_per_iteration = num_envs if use_parallel else 1
