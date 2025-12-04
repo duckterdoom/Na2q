@@ -151,10 +151,10 @@ def train(
     batch_size: int = 32,
     buffer_capacity: int = 5000,
     lr: float = 5e-4,
-    gamma: float = 0.99,
+    gamma: float = 0.97,
     epsilon_start: float = 1.0,
     epsilon_end: float = 0.05,
-    epsilon_decay: int = 50000,
+    epsilon_decay: int = 20000,  # Reduced from 50000 for faster exploration decay
     target_update_interval: int = 200,
     eval_interval: int = 50,
     save_interval: int = 100,
@@ -328,10 +328,17 @@ def train(
         # Train if enough samples
         # For better learning, do multiple updates per iteration
         # More updates when using parallel envs (more data collected)
+        # Increased training frequency to accumulate training steps faster for epsilon decay
         loss = 0.0
         if buffer.can_sample(batch_size):
             # Scale updates with parallel envs for better GPU utilization
-            base_updates = 1 if total_episodes < 100 else 2
+            # Increased base updates: 2-4 updates per episode to accumulate training steps faster
+            if total_episodes < 100:
+                base_updates = 2  # More updates early to start learning faster
+            elif total_episodes < 1000:
+                base_updates = 3  # Peak learning phase
+            else:
+                base_updates = 4  # More updates for faster epsilon decay and better learning
             n_updates = base_updates * max(1, num_envs // 2) if use_parallel else base_updates
             
             total_loss = 0.0
@@ -432,17 +439,26 @@ def train(
                             pass
         
         # Periodically save training history to disk for long runs
+        # For 30k episodes: saves every 3000 episodes to prevent memory issues
         if total_episodes % history_save_interval == 0 and total_episodes > 0:
-            np.savez(
+            try:
+                np.savez(
                 os.path.join(exp_dir, f"training_history_ep{total_episodes}.npz"),
                 episode_rewards=np.array(training_history["episode_rewards"]),
                 coverage_rates=np.array(training_history["coverage_rates"]),
                 losses=np.array(training_history["losses"])
             )
+            except Exception as e:
+                print(f"Warning: Failed to save training history at episode {total_episodes}: {e}")
+                # Continue training even if history save fails
         
-        # Periodic GPU memory cleanup for long training runs
+        # Periodic GPU memory cleanup for long training runs (every 1000 episodes)
+        # This prevents GPU OOM errors during 30k episode training
         if device == "cuda" and total_episodes % 1000 == 0 and total_episodes > 0:
             torch.cuda.empty_cache()
+            # Also run garbage collection to free Python objects
+            import gc
+            gc.collect()
         
         # Check if we've reached the target number of episodes
         if total_episodes >= n_episodes:

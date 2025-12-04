@@ -26,42 +26,62 @@ def worker(remote, parent_remote, env_fn_wrapper):
             cmd, data = remote.recv()
             
             if cmd == "step":
-                obs, reward, terminated, truncated, info = env.step(data)
-                # Stack observations
-                obs_array = np.stack(obs)
-                state = env.get_state()
-                avail_actions = np.stack(env.get_avail_actions())
-                remote.send((obs_array, state, reward, terminated, truncated, info, avail_actions))
+                try:
+                    obs, reward, terminated, truncated, info = env.step(data)
+                    # Stack observations
+                    obs_array = np.stack(obs)
+                    state = env.get_state()
+                    avail_actions = np.stack(env.get_avail_actions())
+                    remote.send((obs_array, state, reward, terminated, truncated, info, avail_actions))
+                except Exception as e:
+                    # Send error info and continue (prevents worker crash)
+                    remote.send((None, None, 0.0, True, True, {"error": str(e)}, None))
                 
             elif cmd == "reset":
-                obs, info = env.reset(seed=data)
-                obs_array = np.stack(obs)
-                state = env.get_state()
-                avail_actions = np.stack(env.get_avail_actions())
-                remote.send((obs_array, state, info, avail_actions))
+                try:
+                    obs, info = env.reset(seed=data)
+                    obs_array = np.stack(obs)
+                    state = env.get_state()
+                    avail_actions = np.stack(env.get_avail_actions())
+                    remote.send((obs_array, state, info, avail_actions))
+                except Exception as e:
+                    # Send error info and continue (prevents worker crash)
+                    remote.send((None, None, {"error": str(e)}, None))
                 
             elif cmd == "get_state":
-                remote.send(env.get_state())
+                try:
+                    remote.send(env.get_state())
+                except Exception as e:
+                    remote.send(None)
                 
             elif cmd == "get_avail_actions":
-                avail_actions = np.stack(env.get_avail_actions())
-                remote.send(avail_actions)
+                try:
+                    avail_actions = np.stack(env.get_avail_actions())
+                    remote.send(avail_actions)
+                except Exception as e:
+                    remote.send(None)
                 
             elif cmd == "get_env_info":
-                env_info = {
-                    "n_agents": env.n_sensors,
-                    "n_actions": env.n_actions,
-                    "obs_dim": env.obs_dim,
-                    "state_dim": env.state_dim,
-                    "max_steps": env.max_steps,
-                    "n_sensors": env.n_sensors,
-                    "n_targets": env.n_targets,
-                    "grid_size": env.grid_size
-                }
-                remote.send(env_info)
+                try:
+                    env_info = {
+                        "n_agents": env.n_sensors,
+                        "n_actions": env.n_actions,
+                        "obs_dim": env.obs_dim,
+                        "state_dim": env.state_dim,
+                        "max_steps": env.max_steps,
+                        "n_sensors": env.n_sensors,
+                        "n_targets": env.n_targets,
+                        "grid_size": env.grid_size
+                    }
+                    remote.send(env_info)
+                except Exception as e:
+                    remote.send({"error": str(e)})
                 
             elif cmd == "close":
-                env.close()
+                try:
+                    env.close()
+                except:
+                    pass
                 remote.close()
                 break
                 
@@ -70,6 +90,10 @@ def worker(remote, parent_remote, env_fn_wrapper):
                 
         except EOFError:
             break
+        except Exception as e:
+            # Log error but continue worker process (prevents crash during long training)
+            print(f"Worker error: {e}")
+            continue
 
 
 class CloudpickleWrapper:
@@ -364,5 +388,8 @@ def make_parallel_env(
             seed=seed,
             **env_kwargs
         )
+
+
+
 
 

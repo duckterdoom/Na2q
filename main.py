@@ -63,14 +63,14 @@ Examples:
                         help="Batch size for training")
     parser.add_argument("--lr", type=float, default=5e-4,
                         help="Learning rate (0.0005 from paper)")
-    parser.add_argument("--gamma", type=float, default=0.99,
-                        help="Discount factor")
+    parser.add_argument("--gamma", type=float, default=0.97,
+                        help="Discount factor (0.97 for stability, paper uses 0.99)")
     parser.add_argument("--epsilon-start", type=float, default=1.0,
                         help="Initial epsilon for exploration")
     parser.add_argument("--epsilon-end", type=float, default=0.05,
                         help="Final epsilon")
-    parser.add_argument("--epsilon-decay", type=int, default=50000,
-                        help="Epsilon decay steps")
+    parser.add_argument("--epsilon-decay", type=int, default=20000,
+                        help="Epsilon decay steps (reduced from 50000 for faster exploration decay)")
     parser.add_argument("--target-update", type=int, default=200,
                         help="Target network update interval")
     parser.add_argument("--buffer-capacity", type=int, default=5000,

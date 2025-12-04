@@ -65,9 +65,24 @@ class Logger:
             if isinstance(value, (int, float)):
                 self.log_scalar(f"episode/{name}", value, episode)
         
+        # Format metrics for display
         metrics_str = " | ".join([f"{k}: {v:.4f}" if isinstance(v, float) else f"{k}: {v}" 
                                   for k, v in metrics.items()])
-        print(f"Episode {episode} | {metrics_str}")
+        
+        # Print to console but use tqdm.write() to avoid interfering with progress bar
+        # This prevents duplicate/overlapping output while still showing episode details
+        try:
+            import sys
+            if hasattr(sys, 'stdout') and hasattr(sys.stdout, 'write'):
+                # Use tqdm.write if available, otherwise regular print
+                try:
+                    from tqdm import tqdm
+                    tqdm.write(f"Episode {episode} | {metrics_str}")
+                except:
+                    print(f"Episode {episode} | {metrics_str}")
+        except:
+            # Fallback to regular print if tqdm not available
+            print(f"Episode {episode} | {metrics_str}")
         
         with open(self.log_file, "a") as f:
             f.write(f"{datetime.now().isoformat()} | Episode {episode} | {metrics_str}\n")

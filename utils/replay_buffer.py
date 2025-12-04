@@ -9,7 +9,7 @@ class EpisodeReplayBuffer:
     """Episode-based replay buffer for recurrent agents."""
     
     def __init__(self, capacity: int, n_agents: int, obs_dim: int, state_dim: int,
-                 n_actions: int, max_episode_length: int = 100, chunk_length: int = 10):
+                 n_actions: int, max_episode_length: int = 100, chunk_length: int = 50):
         self.capacity = capacity
         self.n_agents = n_agents
         self.obs_dim = obs_dim
@@ -43,7 +43,12 @@ class EpisodeReplayBuffer:
             self.current_episode = {k: [] for k in self.current_episode.keys()}
     
     def sample(self, batch_size: int) -> Dict[str, np.ndarray]:
-        """Sample batch of episodes with proper padding and diversity."""
+        """
+        Sample batch of episodes for RNN training.
+        
+        IMPORTANT: For RNN-based agents, we MUST sample from the BEGINNING of episodes
+        so that hidden states are properly initialized. Random chunking breaks temporal learning.
+        """
         n_available = len(self.episodes)
         if n_available == 0:
             raise ValueError("Cannot sample from empty buffer")
@@ -59,13 +64,10 @@ class EpisodeReplayBuffer:
             episode = self.episodes[idx]
             ep_len = len(episode["observations"])
             
-            # Sample a chunk from the episode
-            if ep_len <= self.chunk_length:
-                start_idx = 0
-                end_idx = ep_len
-            else:
-                start_idx = np.random.randint(0, ep_len - self.chunk_length + 1)
-                end_idx = start_idx + self.chunk_length
+            # ALWAYS start from the beginning of the episode for proper RNN training
+            # This ensures hidden states are initialized correctly
+            start_idx = 0
+            end_idx = min(ep_len, self.chunk_length)
             
             for key in batch.keys():
                 chunk = episode[key][start_idx:end_idx]

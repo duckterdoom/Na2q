@@ -38,10 +38,11 @@ def verify_environment():
     # Test actions
     actions = [0, 1, 2, 0, 1]
     next_obs, reward, done, truncated, info = env1.step(actions)
-    # Reward can be negative due to penalty for low coverage (<30%)
-    # Max reward: 1.0 (coverage) + 0.5 (full coverage bonus) = 1.5
-    # Min reward: 0.0 (coverage) - 0.1 (penalty) = -0.1
-    assert reward >= -0.1 and reward <= 1.5, f"Reward should be in range [-0.1, 1.5], got {reward}"
+    # Normalized reward centered at 0 for stable learning:
+    # 0% coverage → -1.0
+    # 50% coverage → 0.0
+    # 100% coverage → +1.0 (with bonus up to +1.2)
+    assert reward >= -1.0 and reward <= 1.2, f"Reward should be in range [-1.0, 1.2], got {reward}"
     assert info["coverage_rate"] >= 0 and info["coverage_rate"] <= 1.0, "Coverage should be 0-1"
     
     print("✓ Actions work correctly")
@@ -181,7 +182,7 @@ def verify_training_setup():
         state_dim=env.state_dim,
         n_actions=env.n_actions,
         lr=5e-4,
-        gamma=0.99,
+        gamma=0.97,  # Reduced from 0.99 for training stability
         epsilon_start=1.0,
         epsilon_end=0.05,
         epsilon_decay=50000,
@@ -189,7 +190,7 @@ def verify_training_setup():
         vae_loss_weight=0.1
     )
     
-    assert agent.gamma == 0.99, "Discount γ should be 0.99"
+    assert agent.gamma == 0.97, "Discount γ should be 0.97 (reduced for stability)"
     assert agent.epsilon == 1.0, "Initial epsilon should be 1.0"
     assert agent.epsilon_end == 0.05, "Final epsilon should be 0.05"
     assert agent.epsilon_decay == 50000, "Epsilon decay should be 50,000 steps"
