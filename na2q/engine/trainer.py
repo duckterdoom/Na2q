@@ -154,8 +154,8 @@ class Trainer:
                     total_episodes += 1
                     pbar.update(1)
                 
-                # Curriculum Learning Update (Linear ramp from 0.0 to 1.0 over 10k episodes)
-                curriculum_level = min(1.0, total_episodes / 10000.0)
+                # Curriculum Learning Update (Linear ramp from 0.0 to 1.0 over 20k episodes)
+                curriculum_level = min(1.0, total_episodes / 20000.0)
                 if total_episodes % 100 == 0:  # Update every 100 episodes
                     if self.use_parallel:
                         self.parallel_env.set_curriculum_difficulty(curriculum_level)

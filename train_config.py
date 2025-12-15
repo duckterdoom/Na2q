@@ -10,18 +10,18 @@ DEFAULT_STRONG_GPU_PRESETS: Dict[int, Dict] = {
     1: {
         "device": "cuda",   # Use GPU
         "num_envs": 64,     # CLOUD MODE: Use all CPU cores for massive parallel data collection
-        "episodes": 20000,  # Restore standard duration for quality
-        "batch_size": 512,  # Saturate Cloud GPU
+        "episodes": 40000,  # 10-Hour Run (Deep Convergence)
+        "batch_size": 1024, # Saturate Cloud GPU (High Throughput)
         "lr": 3.0e-4,       # Keep high LR
         "gamma": 0.99,      # Focus on long-term rewards
         "epsilon_start": 1.0, # Start with 100% random actions (Explore)
         "epsilon_end": 0.05,  # End with 5% random actions (Exploit)
-        "epsilon_decay": 10000,  # Restore standard exploration for quality
+        "epsilon_decay": 5000,   # Correct decay for parallel update frequency
         "target_update": 200,   # Frequent updates for stability
-        "eval_interval": 1000,  # Reduce evaluation frequency to save time
+        "eval_interval": 2000,  # Rare evaluation (save time)
         "eval_episodes": 20,    # Robust evaluation average
         "save_interval": 5000,  # Save less often
-        "buffer_capacity": 500000, # Large buffer
+        "buffer_capacity": 1000000, # Maximize buffer for long run
         "chunk_length": 100,    # Standard episode length
         "updates_per_step": 4,  # High Quality (4 updates per step)
         "learning_starts": 100, # Start immediately
