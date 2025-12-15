@@ -77,6 +77,12 @@ def worker(remote, parent_remote, env_fn_wrapper):
                 except Exception as e:
                     remote.send({"error": str(e)})
                 
+            elif cmd == "set_difficulty":
+                try:
+                    env.set_curriculum_difficulty(data)
+                except Exception as e:
+                    print(f"Worker error setting difficulty: {e}")
+                
             elif cmd == "close":
                 try:
                     env.close()
@@ -254,6 +260,11 @@ class ParallelEnv:
         
         return observations, states, rewards, terminateds, truncateds, infos, avail_actions
     
+    def set_curriculum_difficulty(self, level: float):
+        """Set curriculum difficulty for all environments."""
+        for remote in self.remotes:
+            remote.send(("set_difficulty", level))
+    
     def close(self):
         """Close all environments."""
         if self.closed:
@@ -345,6 +356,11 @@ class DummyParallelEnv:
         
         return observations, states, rewards, terminateds, truncateds, infos, avail_actions
     
+    def set_curriculum_difficulty(self, level: float):
+        """Set curriculum difficulty for all environments."""
+        for env in self.envs:
+            env.set_curriculum_difficulty(level)
+
     def close(self):
         for env in self.envs:
             env.close()

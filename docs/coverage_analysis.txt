@@ -26,6 +26,12 @@ In this small map, 5 sensors are simply not enough to cover the floor spacing.
 Even if they spread out perfectly, over 76% of the 3x3 grid remains blind spots. 
 The targets can easily hide in these large gaps.
 
+IMPORTANT DISTINCTION:
+- STATIC AREA COVERAGE (23.6%): Limits how much ground is seen at once.
+- DYNAMIC TARGET COVERAGE (~60% Mean, ~80% Peak): Because targets MOVE, sensors can track them.
+  A "Perfect Agent" that follows targets can achieve ~60% average coverage, with peaks up to 80%.
+  The goal is to reach this 60% dynamic limit.
+
 --------------------------------------------------------------------------------
 SCENARIO 2 (Large Scale)
 --------------------------------------------------------------------------------

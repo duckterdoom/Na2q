@@ -42,7 +42,7 @@ class Trainer:
         self.max_steps = config.get("max_steps", 100)
         self.env_kwargs = config.get("env_kwargs", {})
         
-        self.use_parallel = self.num_envs > 1 and self.device == "cuda"
+        self.use_parallel = self.num_envs > 1
         
         if self.use_parallel:
             from environments.parallel_env import make_parallel_env
@@ -73,7 +73,8 @@ class Trainer:
             epsilon_start=config.get("epsilon_start", 1.0), epsilon_end=config.get("epsilon_end", 0.05),
             epsilon_decay=config.get("epsilon_decay", 10000),
             target_update_interval=config.get("target_update_interval", 200),
-            device=self.device, use_amp=config.get("use_amp", True)
+            device=self.device, use_amp=config.get("use_amp", True),
+            hidden_dim=128, rnn_hidden_dim=128, attention_hidden_dim=128 # Increased model size
         )
         
         # Replay Buffer
@@ -146,7 +147,16 @@ class Trainer:
                     total_episodes += 1
                     pbar.update(1)
                 
+                # Curriculum Learning Update (Linear ramp from 0.0 to 1.0 over 15k episodes)
+                curriculum_level = min(1.0, total_episodes / 15000.0)
+                if total_episodes % 100 == 0:  # Update every 100 episodes
+                    if self.use_parallel:
+                        self.parallel_env.set_curriculum_difficulty(curriculum_level)
+                    else:
+                        self.env.set_curriculum_difficulty(curriculum_level)
+                
                 # Update Pbar
+
                 pbar.set_postfix({
                     "R": f"{self.tracker.get_mean('reward'):.2f}",
                     "C": f"{self.tracker.get_mean('coverage'):.1%}",

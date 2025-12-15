@@ -154,12 +154,29 @@ class DSNEnv(gym.Env):
         else:
             return self._get_scenario2_sensor_positions()
     
+        self.difficulty_level = 1.0  # Default to full difficulty
+        
+    def set_curriculum_difficulty(self, level: float):
+        """
+        Set curriculum difficulty level (0.0 to 1.0).
+        0.0 -> Speed [0.1, 0.2] (Slow)
+        1.0 -> Speed [0.3, 0.7] (Fast)
+        """
+        self.difficulty_level = np.clip(level, 0.0, 1.0)
+    
     def _initialize_targets(self) -> Tuple[np.ndarray, np.ndarray]:
         """Initialize randomly moving targets with unpredictable paths."""
         margin = self.cell_size * 0.1
         positions = self.np_random.uniform(margin, self.field_size - margin, (self.n_targets, 2))
         
-        speeds = self.np_random.uniform(self.target_speed_range[0], self.target_speed_range[1], self.n_targets)
+        # Curriculum Learning: Scale speed based on difficulty level
+        # Base speed range: [0.3, 0.7]
+        # Easy speed range: [0.1, 0.2]
+        # We interpolate between limits based on difficulty
+        min_speed = 0.1 + (self.target_speed_range[0] - 0.1) * self.difficulty_level
+        max_speed = 0.2 + (self.target_speed_range[1] - 0.2) * self.difficulty_level
+        
+        speeds = self.np_random.uniform(min_speed, max_speed, self.n_targets)
         angles = self.np_random.uniform(0, 2 * np.pi, self.n_targets)
         velocities = np.stack([speeds * np.cos(angles), speeds * np.sin(angles)], axis=1)
         
@@ -360,7 +377,7 @@ class DSNEnv(gym.Env):
                 # Reward for pointing AT the target (minimizing angle diff)
                 # Reduced bonus to 0.02 to prevent "Alignment Farming" (grouping on 1 target)
                 alignment_quality = 1.0 - (abs(angle_diff) / np.pi)
-                centering_bonus += alignment_quality * 0.02
+                centering_bonus += alignment_quality * 0.05
                 
         reward += centering_bonus
         
