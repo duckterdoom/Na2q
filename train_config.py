@@ -1,3 +1,6 @@
+# Setting for training 
+
+
 from argparse import Namespace
 from copy import deepcopy
 from typing import Dict
@@ -5,24 +8,24 @@ from typing import Dict
 
 DEFAULT_STRONG_GPU_PRESETS: Dict[int, Dict] = {
     1: {
-        "device": "cuda",
-        "num_envs": 16,
-        "episodes": 20000,
-        "batch_size": 256,
-        "lr": 1.5e-4,
-        "gamma": 0.99,
-        "epsilon_start": 1.0,
-        "epsilon_end": 0.05,
-        "epsilon_decay": 3000,  
-        "target_update": 200,
-        "eval_interval": 500,
-        "eval_episodes": 20,
-        "save_interval": 2000,
-        "buffer_capacity": 300000,
-        "chunk_length": 100,
-        "updates_per_step": 8,    
-        "learning_starts": 100,
-        "no_amp": False,
+        "device": "cuda",   # Use GPU
+        "num_envs": 16,     # For faster training on strong hardware (RTX 4050)
+        "episodes": 20000,  # Enough games to learn the policy
+        "batch_size": 256,  # Stable gradients
+        "lr": 1.5e-4,       # Good speed for Adam optimizer
+        "gamma": 0.99,      # Focus on long-term rewards
+        "epsilon_start": 1.0, # Start with 100% random actions (Explore)
+        "epsilon_end": 0.05,  # End with 5% random actions (Exploit)
+        "epsilon_decay": 3000,  # Fast exploration decay
+        "target_update": 200,   # Frequent updates for stability
+        "eval_interval": 500,   # Check progress often
+        "eval_episodes": 20,    # Robust evaluation average
+        "save_interval": 2000,  # Save backup every 2k episodes
+        "buffer_capacity": 300000, # Store many past experiences
+        "chunk_length": 100,    # Standard episode length
+        "updates_per_step": 8,  # Learn fast (sample efficiency)
+        "learning_starts": 100, # Start immediately
+        "no_amp": False,        # Speed up training (FP16)
     },
     2: {
         "device": "cuda",
