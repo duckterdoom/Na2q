@@ -57,6 +57,7 @@ class DSNEnv(gym.Env):
         self.max_steps = max_steps
         self.target_speed_range = target_speed_range
         self.render_mode = render_mode
+        self.difficulty_level = 1.0  # Default to full difficulty for Curriculum Learning
         
         # Configure scenario from EXPERIMENT ENVIRONMENT spec
         if scenario == 1:
@@ -154,7 +155,7 @@ class DSNEnv(gym.Env):
         else:
             return self._get_scenario2_sensor_positions()
     
-        self.difficulty_level = 1.0  # Default to full difficulty
+
         
     def set_curriculum_difficulty(self, level: float):
         """
