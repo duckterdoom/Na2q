@@ -139,7 +139,7 @@ class Trainer:
                     for ep, info in zip(episodes_list, infos_list):
                         if not ep["rewards"]: continue
                         self._process_episode(ep, info, total_episodes)
-                        if total_episodes % 16 == 0:
+                        if total_episodes % 64 == 0:
                             print(f"[Ep {total_episodes}] Reward: {self.tracker.get_mean('reward'):.2f} | Coverage: {self.tracker.get_mean('coverage'):.1%} | Eps: {self.agent.epsilon:.3f}")
                         
                         total_episodes += 1
@@ -148,14 +148,14 @@ class Trainer:
                     episode, info = collect_episode(self.env, self.agent, self.max_steps)
                     self._process_episode(episode, info, total_episodes)
                     
-                    if total_episodes % 16 == 0:
+                    if total_episodes % 64 == 0:
                         print(f"[Ep {total_episodes}] Reward: {self.tracker.get_mean('reward'):.2f} | Coverage: {self.tracker.get_mean('coverage'):.1%} | Eps: {self.agent.epsilon:.3f}")
 
                     total_episodes += 1
                     pbar.update(1)
                 
-                # Curriculum Learning Update (Linear ramp from 0.0 to 1.0 over 15k episodes)
-                curriculum_level = min(1.0, total_episodes / 15000.0)
+                # Curriculum Learning Update (Linear ramp from 0.0 to 1.0 over 10k episodes)
+                curriculum_level = min(1.0, total_episodes / 10000.0)
                 if total_episodes % 100 == 0:  # Update every 100 episodes
                     if self.use_parallel:
                         self.parallel_env.set_curriculum_difficulty(curriculum_level)

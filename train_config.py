@@ -9,21 +9,21 @@ from typing import Dict
 DEFAULT_STRONG_GPU_PRESETS: Dict[int, Dict] = {
     1: {
         "device": "cuda",   # Use GPU
-        "num_envs": 16,     # For faster training on strong hardware (RTX 4050)
-        "episodes": 30000,  # Enough games to learn the policy
-        "batch_size": 256,  # Stable gradients
-        "lr": 1.5e-4,       # Good speed for Adam optimizer
+        "num_envs": 64,     # CLOUD MODE: Use all CPU cores for massive parallel data collection
+        "episodes": 20000,  # Restore standard duration for quality
+        "batch_size": 512,  # Saturate Cloud GPU
+        "lr": 3.0e-4,       # Keep high LR
         "gamma": 0.99,      # Focus on long-term rewards
         "epsilon_start": 1.0, # Start with 100% random actions (Explore)
         "epsilon_end": 0.05,  # End with 5% random actions (Exploit)
-        "epsilon_decay": 10000,  # Slow down decay for better exploration
+        "epsilon_decay": 10000,  # Restore standard exploration for quality
         "target_update": 200,   # Frequent updates for stability
-        "eval_interval": 500,   # Check progress often
+        "eval_interval": 1000,  # Reduce evaluation frequency to save time
         "eval_episodes": 20,    # Robust evaluation average
-        "save_interval": 2000,  # Save backup every 2k episodes
-        "buffer_capacity": 300000, # Store many past experiences
+        "save_interval": 5000,  # Save less often
+        "buffer_capacity": 500000, # Large buffer
         "chunk_length": 100,    # Standard episode length
-        "updates_per_step": 8,  # Learn fast (sample efficiency)
+        "updates_per_step": 4,  # High Quality (4 updates per step)
         "learning_starts": 100, # Start immediately
         "no_amp": False,        # Speed up training (FP16)
     },
