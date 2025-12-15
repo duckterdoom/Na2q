@@ -31,3 +31,7 @@ python -m na2q.main --mode train --scenario 1 --resume
 ## Config
 
 See `train_config.py` for default training settings.
+
+## Documentation
+
+- [Coverage Analysis](docs/coverage_analysis.md) — Mathematical proof of why 80% coverage is impossible.
