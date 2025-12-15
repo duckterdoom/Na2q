@@ -16,7 +16,7 @@ import json
 # Use non-interactive backend for saving figures
 plt.switch_backend('Agg')
 
-from utils import get_device
+from na2q.utils import get_device
 
 
 def smooth_curve(values: List[float], window: int = 10) -> np.ndarray:
@@ -35,7 +35,7 @@ def smooth_curve(values: List[float], window: int = 10) -> np.ndarray:
     return smoothed
 
 
-def plot_training_results(exp_dir: str, window: int = 50):
+def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[str] = None, media_dir: Optional[str] = None):
     """
     Generate training result plots.
     
@@ -44,7 +44,14 @@ def plot_training_results(exp_dir: str, window: int = 50):
     - coverage_ratio.png: Coverage over time
     - training_losses.png: Loss curves
     """
-    history_path = os.path.join(exp_dir, "training_history.npz")
+    history_dir = history_dir or os.path.join(exp_dir, "history")
+    media_dir = media_dir or os.path.join(exp_dir, "media")
+    os.makedirs(media_dir, exist_ok=True)
+    
+    # Prefer history_dir, fallback to legacy location
+    history_path = os.path.join(history_dir, "training_history.npz")
+    if not os.path.exists(history_path):
+        history_path = os.path.join(exp_dir, "training_history.npz")
     
     if not os.path.exists(history_path):
         print(f"Warning: No training history found at {history_path}")
@@ -94,9 +101,16 @@ def plot_training_results(exp_dir: str, window: int = 50):
     
     # Loss plot
     ax3 = axes[1, 0]
-    if len(losses) > 0 and np.any(np.array(losses) > 0):
-        ax3.plot(episodes, losses, alpha=0.3, color=colors['loss'], label='Raw')
-        ax3.plot(episodes, smooth_curve(list(losses), window), color=colors['loss'], linewidth=2, label=f'Smoothed (w={window})')
+    if len(losses) > 0:
+        # Losses might have different length than episodes due to updates_per_step
+        loss_x = np.linspace(episodes[0], episodes[-1], len(losses))
+        ax3.plot(loss_x, losses, alpha=0.3, color=colors['loss'], label='Raw')
+        
+        # Smooth loss
+        if len(losses) > window:
+            smooth_loss = np.convolve(losses, np.ones(window)/window, mode='valid')
+            smooth_x = np.linspace(episodes[0], episodes[-1], len(smooth_loss))
+            ax3.plot(smooth_x, smooth_loss, color=colors['loss'], label=f'Smoothed (w={window})')
     ax3.set_xlabel('Episode')
     ax3.set_ylabel('Loss')
     ax3.set_title('Training Loss (TD + VAE)')
@@ -131,7 +145,7 @@ def plot_training_results(exp_dir: str, window: int = 50):
              bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
     
     plt.tight_layout()
-    dashboard_path = os.path.join(exp_dir, "training_dashboard.png")
+    dashboard_path = os.path.join(media_dir, "train_dashboard.png")
     plt.savefig(dashboard_path, dpi=150, bbox_inches='tight')
     plt.close()
     print(f"Saved: {dashboard_path}")
@@ -149,26 +163,107 @@ def plot_training_results(exp_dir: str, window: int = 50):
     ax.grid(True, alpha=0.3)
     ax.set_ylim(0, 100)
     
-    coverage_path = os.path.join(exp_dir, "coverage_ratio.png")
+    coverage_path = os.path.join(media_dir, "train_coverage.png")
     plt.savefig(coverage_path, dpi=150, bbox_inches='tight')
     plt.close()
     print(f"Saved: {coverage_path}")
     
     # 3. Training Losses Chart
     fig, ax = plt.subplots(figsize=(10, 6))
-    if len(losses) > 0 and np.any(np.array(losses) > 0):
-        ax.plot(episodes, losses, alpha=0.3, color=colors['loss'])
-        ax.plot(episodes, smooth_curve(list(losses), window), color=colors['loss'], linewidth=2, label='Total Loss')
+    if len(losses) > 0:
+        loss_x = np.linspace(episodes[0], episodes[-1], len(losses))
+        ax.plot(loss_x, losses, alpha=0.3, color=colors['loss'])
+        
+        if len(losses) > window:
+            smooth_loss = np.convolve(losses, np.ones(window)/window, mode='valid')
+            smooth_x = np.linspace(episodes[0], episodes[-1], len(smooth_loss))
+            ax.plot(smooth_x, smooth_loss, color=colors['loss'], linewidth=2, label='Total Loss')
     ax.set_xlabel('Episode', fontsize=12)
     ax.set_ylabel('Loss', fontsize=12)
     ax.set_title('Training Loss (TD Loss + VAE Loss)', fontsize=14)
     ax.legend()
     ax.grid(True, alpha=0.3)
     
-    loss_path = os.path.join(exp_dir, "training_losses.png")
+    loss_path = os.path.join(media_dir, "train_losses.png")
     plt.savefig(loss_path, dpi=150, bbox_inches='tight')
     plt.close()
     print(f"Saved: {loss_path}")
+
+
+def plot_test_results(results: dict, output_path: str, scenario: int = 1):
+    """
+    Generate test results chart.
+    
+    Creates:
+    - test_results.png: Bar chart with coverage distribution and summary stats
+    """
+    episode_rewards = results.get("episode_rewards", [])
+    coverage_rates = results.get("coverage_rates", [])
+    
+    if len(episode_rewards) == 0:
+        print("Warning: No test results to plot")
+        return
+    
+    coverage_pct = np.array(coverage_rates) * 100
+    n_test_episodes = len(episode_rewards)
+    
+    # Try to get training episodes count from training_history
+    training_episodes = "N/A"
+    try:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        history_path = os.path.join(script_dir, "Result", f"scenario{scenario}", "history", "training_history.npz")
+        if os.path.exists(history_path):
+            data = np.load(history_path)
+            training_episodes = len(data.get("episode_rewards", []))
+    except:
+        pass
+    
+    fig, axes = plt.subplots(1, 2, figsize=(12, 5))
+    fig.suptitle(f'NA²Q Test Results - Scenario {scenario}', fontsize=14, fontweight='bold')
+    
+    # Left: Coverage distribution histogram
+    ax1 = axes[0]
+    ax1.hist(coverage_pct, bins=min(20, n_test_episodes), color='#28A745', alpha=0.7, edgecolor='black')
+    ax1.axvline(np.mean(coverage_pct), color='red', linestyle='--', linewidth=2, 
+                label=f'Mean: {np.mean(coverage_pct):.1f}%')
+    ax1.set_xlabel('Coverage Rate (%)', fontsize=12)
+    ax1.set_ylabel('Frequency', fontsize=12)
+    ax1.set_title('Coverage Distribution', fontsize=12)
+    ax1.legend()
+    ax1.grid(True, alpha=0.3)
+    ax1.set_xlim(0, 100)
+    
+    # Right: Summary statistics
+    ax2 = axes[1]
+    ax2.axis('off')
+    
+    summary_text = f"""
+    Test Results Summary
+    ────────────────────────────────
+    Model trained on: {training_episodes} episodes
+    Test episodes: {n_test_episodes}
+    
+    Coverage Rate:
+      Mean:    {np.mean(coverage_pct):6.2f}%
+      Std:     {np.std(coverage_pct):6.2f}%
+      Best:    {np.max(coverage_pct):6.2f}%
+      Worst:   {np.min(coverage_pct):6.2f}%
+    
+    Episode Reward:
+      Mean:    {np.mean(episode_rewards):8.3f}
+      Std:     {np.std(episode_rewards):8.3f}
+      Best:    {np.max(episode_rewards):8.3f}
+      Worst:   {np.min(episode_rewards):8.3f}
+    """
+    
+    ax2.text(0.1, 0.5, summary_text, transform=ax2.transAxes, fontsize=12,
+             verticalalignment='center', fontfamily='monospace',
+             bbox=dict(boxstyle='round', facecolor='lightgreen', alpha=0.3))
+    
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches='tight')
+    plt.close()
+    print(f"Saved: {output_path}")
 
 
 def generate_video(
@@ -195,8 +290,8 @@ def generate_video(
         print("Error: imageio required for video generation. Install with: pip install imageio")
         return
     
-    from environment import make_env
-    from model import NA2QAgent
+    from environments.environment import make_env
+    from na2q.models import NA2QAgent
     
     # Auto-detect device if not specified
     device = get_device(device)
@@ -277,8 +372,8 @@ def save_knowledge(
     - Training metrics summary
     - Sample agent contributions
     """
-    from environment import make_env
-    from model import NA2QAgent
+    from environments.environment import make_env
+    from na2q.models import NA2QAgent
     import torch
     
     # Auto-detect device if not specified
