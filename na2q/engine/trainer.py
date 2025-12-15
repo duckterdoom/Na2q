@@ -139,11 +139,18 @@ class Trainer:
                     for ep, info in zip(episodes_list, infos_list):
                         if not ep["rewards"]: continue
                         self._process_episode(ep, info, total_episodes)
+                        if total_episodes % 16 == 0:
+                            print(f"[Ep {total_episodes}] Reward: {self.tracker.get_mean('reward'):.2f} | Coverage: {self.tracker.get_mean('coverage'):.1%} | Eps: {self.agent.epsilon:.3f}")
+                        
                         total_episodes += 1
                         pbar.update(1)
                 else:
                     episode, info = collect_episode(self.env, self.agent, self.max_steps)
                     self._process_episode(episode, info, total_episodes)
+                    
+                    if total_episodes % 16 == 0:
+                        print(f"[Ep {total_episodes}] Reward: {self.tracker.get_mean('reward'):.2f} | Coverage: {self.tracker.get_mean('coverage'):.1%} | Eps: {self.agent.epsilon:.3f}")
+
                     total_episodes += 1
                     pbar.update(1)
                 
