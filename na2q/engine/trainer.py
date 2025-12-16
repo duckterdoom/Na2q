@@ -130,7 +130,8 @@ class Trainer:
         last_eval_episode = self.start_episode
         last_save_episode = self.start_episode
         best_eval_reward = -float('inf')
-        
+        current_loss = 0.0  # Initialize loss tracker
+
         try:
             while total_episodes < target_episodes:
                 # Collect Data
@@ -140,7 +141,7 @@ class Trainer:
                         if not ep["rewards"]: continue
                         self._process_episode(ep, info, total_episodes)
                         if total_episodes % 64 == 0:
-                            print(f"[Ep {total_episodes}] Reward: {self.tracker.get_mean('reward'):.2f} | Coverage: {self.tracker.get_mean('coverage'):.1%} | Eps: {self.agent.epsilon:.3f}")
+                            print(f"[Ep {total_episodes}] Reward: {self.tracker.get_mean('reward'):.2f} | Coverage: {self.tracker.get_mean('coverage'):.1%} | Eps: {self.agent.epsilon:.3f} | Loss: {current_loss:.4f}")
                         
                         total_episodes += 1
                         pbar.update(1)
@@ -149,13 +150,14 @@ class Trainer:
                     self._process_episode(episode, info, total_episodes)
                     
                     if total_episodes % 64 == 0:
-                        print(f"[Ep {total_episodes}] Reward: {self.tracker.get_mean('reward'):.2f} | Coverage: {self.tracker.get_mean('coverage'):.1%} | Eps: {self.agent.epsilon:.3f}")
+                        print(f"[Ep {total_episodes}] Reward: {self.tracker.get_mean('reward'):.2f} | Coverage: {self.tracker.get_mean('coverage'):.1%} | Eps: {self.agent.epsilon:.3f} | Loss: {current_loss:.4f}")
 
                     total_episodes += 1
                     pbar.update(1)
                 
-                # Curriculum Learning Update (Linear ramp from 0.0 to 1.0 over 20k episodes)
-                curriculum_level = min(1.0, total_episodes / 20000.0)
+                # Curriculum Learning Update (Linear ramp from 0.0 to 1.0 over 50% of episodes)
+                ramp_episodes = self.args.episodes / 2.0
+                curriculum_level = min(1.0, total_episodes / ramp_episodes)
                 if total_episodes % 100 == 0:  # Update every 100 episodes
                     if self.use_parallel:
                         self.parallel_env.set_curriculum_difficulty(curriculum_level)
@@ -167,13 +169,16 @@ class Trainer:
                 pbar.set_postfix({
                     "R": f"{self.tracker.get_mean('reward'):.2f}",
                     "C": f"{self.tracker.get_mean('coverage'):.1%}",
-                    "ε": f"{self.agent.epsilon:.3f}"
+                    "ε": f"{self.agent.epsilon:.3f}",
+                    "L": f"{current_loss:.3f}"
                 })
                 
                 # Training Step
                 updates_per_step = self.config.get("updates_per_step", 1)
                 for _ in range(updates_per_step):
                     loss = self._training_step(batch_size, learning_starts, total_episodes)
+                    if loss is not None:
+                        current_loss = loss
                     self.training_history["losses"].append(loss) # For history tracking
                 if self.use_parallel: # Replicate loss for parallel episodes count mismatch if needed, or just append once per batch
                      # The original code replicated loss. Simplified here to append once per training step. 

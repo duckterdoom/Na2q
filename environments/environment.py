@@ -367,18 +367,21 @@ class DSNEnv(gym.Env):
             nearest_idx = np.argmin(dists)
             min_dist = dists[nearest_idx]
             
-            # If target is within potential range (even if not in FOV yet)
-            if min_dist <= self.sensing_range:
-                # Calculate angle to this target
-                diff = self.target_positions[nearest_idx] - sensor_pos
-                angle_to_target = np.arctan2(diff[1], diff[0])
-                # Normalize difference to [-pi, pi]
-                angle_diff = self._normalize_angle(angle_to_target - sensor_angle)
-                
-                # Reward for pointing AT the target (minimizing angle diff)
-                # Reduced bonus to 0.02 to prevent "Alignment Farming" (grouping on 1 target)
-                alignment_quality = 1.0 - (abs(angle_diff) / np.pi)
-                centering_bonus += alignment_quality * 0.05
+            # Calculate angle to this target
+            diff = self.target_positions[nearest_idx] - sensor_pos
+            angle_to_target = np.arctan2(diff[1], diff[0])
+            # Normalize difference to [-pi, pi]
+            angle_diff = angle_to_target - sensor_angle
+            angle_diff = (angle_diff + np.pi) % (2 * np.pi) - np.pi
+            
+            # Reward: 1.0 if perfectly aligned, 0.0 if 180 degrees away
+            # alignment_quality = (np.pi - abs(angle_diff)) / np.pi
+            # Stronger Reward: Use Cosine alignment (1.0 aligned, -1.0 opposite)
+            alignment_quality = np.cos(angle_diff)
+            
+            # Add to total bonus ("Compass Hint")
+            # We scale it so 5 sensors * 1.0 = 5.0 max reduced by factor 0.05 -> 0.25 total
+            centering_bonus += alignment_quality * 0.05
                 
         reward += centering_bonus
         
