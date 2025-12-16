@@ -48,8 +48,8 @@ Examples:
                         help="Operation mode")
     
     # Environment settings
-    parser.add_argument("--scenario", type=int, default=1, choices=[1, 2],
-                        help="Scenario (1: 3×3 grid/5 sensors, 2: 10×10 grid/50 sensors)")
+    parser.add_argument("--scenario", type=int, default=1, choices=[1, 2, 99],
+                        help="Scenario (1: 3×3 grid/5 sensors, 2: 10×10 grid/50 sensors, 99: Sanity Check)")
     parser.add_argument("--max-steps", type=int, default=100,
                         help="Maximum steps per episode")
     
