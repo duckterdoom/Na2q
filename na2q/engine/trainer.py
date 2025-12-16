@@ -156,7 +156,7 @@ class Trainer:
                     pbar.update(1)
                 
                 # Curriculum Learning Update (Linear ramp from 0.0 to 1.0 over 50% of episodes)
-                ramp_episodes = self.args.episodes / 2.0
+                ramp_episodes = self.config.get("episodes") / 2.0
                 curriculum_level = min(1.0, total_episodes / ramp_episodes)
                 if total_episodes % 100 == 0:  # Update every 100 episodes
                     if self.use_parallel:
