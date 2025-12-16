@@ -36,14 +36,14 @@ DEFAULT_STRONG_GPU_PRESETS: Dict[int, Dict] = {
         "gamma": 0.99,
         "epsilon_start": 1.0,
         "epsilon_end": 0.05,
-        "epsilon_decay": 500,    # FAST decay
+        "epsilon_decay": 1000,   # Decays by step 1000 (Halfway)
         "target_update": 200,
         "eval_interval": 200,
         "eval_episodes": 10,
         "save_interval": 1000,
         "buffer_capacity": 200000,
         "chunk_length": 100,
-        "updates_per_step": 8,   # Fast updates
+        "updates_per_step": 64,  # SYNCED: 1 update per episode (64 envs -> 64 updates)
         "learning_starts": 100,
         "no_amp": False,
     },
