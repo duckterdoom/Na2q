@@ -380,8 +380,10 @@ class DSNEnv(gym.Env):
             alignment_quality = np.cos(angle_diff)
             
             # Add to total bonus ("Compass Hint")
-            # We scale it so 5 sensors * 1.0 = 5.0 max reduced by factor 0.20 -> 1.0 total
-            centering_bonus += alignment_quality * 0.20
+            # Normalized: Max total bonus is 1.0 regardless of sensor count
+            # S1 (5 sensors) -> 0.2 per sensor
+            # S2 (50 sensors) -> 0.02 per sensor
+            centering_bonus += alignment_quality * (1.0 / self.n_sensors)
                 
         reward += centering_bonus
         
