@@ -25,14 +25,14 @@ python -m na2q.main --mode train --scenario 1 --resume
 ### Quick Verification (Sanity Check)
 To test if the fix for **Scenario 1** works without waiting hours, run the "Turbo Test" config (Scenario 99):
 ```bash
-python3 -m na2q.main --mode train --scenario 99
+python -m na2q.main --mode train --scenario 99
 ```
 *Runs for 15 minutes (2k episodes) to verify the "Infinite Range Reward" fix.*
 
 ### Run Scenario 2 (Swarm)
 To run the 50-sensor "Swarm" configuration:
 ```bash
-python3 -m na2q.main --mode train --scenario 2
+python -m na2q.main --mode train --scenario 2
 ```
 
 ### Run Visualization
