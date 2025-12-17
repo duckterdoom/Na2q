@@ -28,7 +28,7 @@ class Trainer:
         # Setup directories
         self.exp_dir = setup_experiment(config.get("log_dir", "Result"), config.get("exp_name"))
         self.checkpoints_dir = os.path.join(self.exp_dir, "checkpoints")
-        self.history_dir = os.path.join(self.exp_dir, "history")
+        self.history_dir = self.checkpoints_dir  # History saved in checkpoints
         self.media_dir = os.path.join(self.exp_dir, "media")
         
         # Logger
@@ -99,7 +99,7 @@ class Trainer:
         if os.path.exists(checkpoint_path):
             print(f"  Resuming from: {checkpoint_path}")
             self.agent.load(checkpoint_path)
-            history_path = os.path.join(self.history_dir, "training_history.npz")
+            history_path = os.path.join(self.checkpoints_dir, "training_history.npz")
             if os.path.exists(history_path):
                 old_history = np.load(history_path)
                 self.training_history = {

@@ -5,6 +5,7 @@ Includes:
 - Training metrics plots (rewards, coverage, loss)
 - Video generation of trained agents
 - Knowledge/interpretability export
+- Trend analysis
 """
 
 import os
@@ -12,6 +13,37 @@ import numpy as np
 import matplotlib.pyplot as plt
 from typing import Optional, List
 import json
+
+
+def analyze_trend(history_path: str = 'Result/scenario1/history/training_history.npz', chunk_size: int = 1000):
+    """Analyze training trends by chunking episodes."""
+    if not os.path.exists(history_path):
+        print(f"File not found: {history_path}")
+        return
+    
+    data = np.load(history_path)
+    rewards = data['episode_rewards']
+    coverage = data['coverage_rates']
+    
+    num_chunks = len(rewards) // chunk_size
+    
+    print(f"Total episodes: {len(rewards)}")
+    print(f"Analyzing in {num_chunks} chunks of {chunk_size} episodes:")
+    print(f"{'Chunk':<10} {'Avg Reward':<15} {'Avg Coverage':<15}")
+    print("-" * 40)
+    
+    for i in range(num_chunks):
+        start = i * chunk_size
+        end = (i + 1) * chunk_size
+        r_chunk = rewards[start:end]
+        c_chunk = coverage[start:end]
+        print(f"{i:<10} {np.mean(r_chunk):<15.4f} {np.mean(c_chunk):<15.4f}")
+    
+    # Last chunk if any remainder
+    if len(rewards) % chunk_size != 0:
+        r_chunk = rewards[num_chunks*chunk_size:]
+        c_chunk = coverage[num_chunks*chunk_size:]
+        print(f"{'Last':<10} {np.mean(r_chunk):<15.4f} {np.mean(c_chunk):<15.4f}")
 
 # Use non-interactive backend for saving figures
 plt.switch_backend('Agg')
@@ -44,7 +76,7 @@ def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[
     - coverage_ratio.png: Coverage over time
     - training_losses.png: Loss curves
     """
-    history_dir = history_dir or os.path.join(exp_dir, "history")
+    history_dir = history_dir or os.path.join(exp_dir, "checkpoints")  # History in checkpoints
     media_dir = media_dir or os.path.join(exp_dir, "media")
     os.makedirs(media_dir, exist_ok=True)
     

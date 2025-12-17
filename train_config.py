@@ -1,57 +1,51 @@
-# Setting for training 
+"""
+Training configuration presets for NA²Q.
 
+Defines hyperparameters for different scenarios and hardware configurations.
+"""
 
 from argparse import Namespace
 from copy import deepcopy
 from typing import Dict
 
 
-DEFAULT_STRONG_GPU_PRESETS: Dict[int, Dict] = {
+# =============================================================================
+# Training Presets
+# =============================================================================
+
+TRAINING_PRESETS: Dict[int, Dict] = {
+    # -------------------------------------------------------------------------
+    # Scenario 1: Small-scale (5 sensors, 6 targets)
+    # -------------------------------------------------------------------------
     1: {
-        "device": "cuda",   # Use GPU
-        "num_envs": 64,     # CLOUD MODE: Use all CPU cores
-        "episodes": 40000,  # 10-Hour Run (Deep Convergence)
-        "batch_size": 1024, # Saturate Cloud GPU
-        "lr": 3.0e-4,       # Keep high LR
-        "gamma": 0.99,      # Focus on long-term rewards
-        "epsilon_start": 1.0, # Start with 100% random actions (Explore)
-        "epsilon_end": 0.05,  # End with 5% random actions (Exploit)
-        "epsilon_decay": 5000,   # Correct decay for parallel update frequency
-        "target_update": 200,   # Frequent updates for stability
-        "eval_interval": 2000,  # Rare evaluation
-        "eval_episodes": 20,    # Robust evaluation average
-        "save_interval": 5000,  # Save less often
-        "buffer_capacity": 1000000, # Maximize buffer for long run
-        "chunk_length": 100,    # Standard episode length
-        "updates_per_step": 32, # SYNCED: High updates to match 64 envs data rate
-        "learning_starts": 100, # Start immediately
-        "no_amp": False,        # Speed up training (FP16)
-    },
-    99: {  # SANITY CHECK / TEST CONFIG
         "device": "cuda",
         "num_envs": 64,
-        "episodes": 2000,   # SHORT RUN: Verify fix in 10 minutes
+        "episodes": 40000,
         "batch_size": 1024,
         "lr": 3.0e-4,
         "gamma": 0.99,
         "epsilon_start": 1.0,
         "epsilon_end": 0.05,
-        "epsilon_decay": 1000,   # Decays by step 1000 (Halfway)
+        "epsilon_decay": 5000,
         "target_update": 200,
-        "eval_interval": 200,
-        "eval_episodes": 10,
-        "save_interval": 1000,
-        "buffer_capacity": 200000,
+        "eval_interval": 2000,
+        "eval_episodes": 20,
+        "save_interval": 5000,
+        "buffer_capacity": 1000000,
         "chunk_length": 100,
-        "updates_per_step": 64,  # SYNCED: 1 update per episode (64 envs -> 64 updates)
+        "updates_per_step": 32,
         "learning_starts": 100,
         "no_amp": False,
     },
+    
+    # -------------------------------------------------------------------------
+    # Scenario 2: Large-scale (50 sensors, 60 targets)
+    # -------------------------------------------------------------------------
     2: {
         "device": "cuda",
-        "num_envs": 28,     # CPU: 28/32 cores
+        "num_envs": 1,          # Single-threaded to avoid freeze
         "episodes": 20000,
-        "batch_size": 64,   # Safe batch size
+        "batch_size": 32,
         "lr": 3.0e-4,
         "gamma": 0.99,
         "epsilon_start": 1.0,
@@ -61,13 +55,40 @@ DEFAULT_STRONG_GPU_PRESETS: Dict[int, Dict] = {
         "eval_interval": 1000,
         "eval_episodes": 20,
         "save_interval": 5000,
-        "buffer_capacity": 100, # Buffer holds 100 * 14 = 1400 episodes
+        "buffer_capacity": 500,
         "chunk_length": 100,
         "updates_per_step": 4,
-        "learning_starts": 64, # Wait for 64 episodes before training
+        "learning_starts": 50,
         "no_amp": False,
     },
-    # Fallback preset for any other scenario IDs
+    
+    # -------------------------------------------------------------------------
+    # Scenario 99: Quick test / sanity check
+    # -------------------------------------------------------------------------
+    99: {
+        "device": "cuda",
+        "num_envs": 64,
+        "episodes": 2000,
+        "batch_size": 1024,
+        "lr": 3.0e-4,
+        "gamma": 0.99,
+        "epsilon_start": 1.0,
+        "epsilon_end": 0.05,
+        "epsilon_decay": 1000,
+        "target_update": 200,
+        "eval_interval": 200,
+        "eval_episodes": 10,
+        "save_interval": 1000,
+        "buffer_capacity": 200000,
+        "chunk_length": 100,
+        "updates_per_step": 64,
+        "learning_starts": 100,
+        "no_amp": False,
+    },
+    
+    # -------------------------------------------------------------------------
+    # Default fallback
+    # -------------------------------------------------------------------------
     0: {
         "device": "cuda",
         "num_envs": 24,
@@ -88,33 +109,31 @@ DEFAULT_STRONG_GPU_PRESETS: Dict[int, Dict] = {
     },
 }
 
+# Backward compatibility alias
+DEFAULT_STRONG_GPU_PRESETS = TRAINING_PRESETS
+
+
+# =============================================================================
+# Helper Functions
+# =============================================================================
 
 def get_strong_gpu_settings(scenario: int = 1) -> Dict:
-    """Get recommended settings for fast training on a strong GPU."""
-    preset = DEFAULT_STRONG_GPU_PRESETS.get(scenario, DEFAULT_STRONG_GPU_PRESETS[0])
+    """Get training settings for a scenario."""
+    preset = TRAINING_PRESETS.get(scenario, TRAINING_PRESETS[0])
     return deepcopy(preset)
 
 
 def format_strong_gpu_settings(scenario: int = 1) -> str:
-    """Return a human-friendly string of the preset for printing/logging."""
+    """Return human-readable config string."""
     cfg = get_strong_gpu_settings(scenario)
-    lines = [
-        "Training config (Scenario {}):".format(scenario),
-    ]
+    lines = [f"Training config (Scenario {scenario}) - from train_config.py:"]
     for key, value in cfg.items():
         lines.append(f"  {key:16}: {value}")
     return "\n".join(lines)
 
 
 def apply_strong_gpu_defaults(args: Namespace, override_existing: bool = False) -> Namespace:
-    """
-    Apply strong GPU defaults to an argparse namespace.
-
-    Args:
-        args: argparse.Namespace from main.py
-        override_existing: if True, replace any existing values; otherwise only
-                           fill in when the field is falsy/None.
-    """
+    """Apply preset defaults to argparse namespace."""
     cfg = get_strong_gpu_settings(getattr(args, "scenario", 1))
     for key, value in cfg.items():
         if override_existing or not getattr(args, key, None):

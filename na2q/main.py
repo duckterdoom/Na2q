@@ -248,7 +248,7 @@ def run_visualize(args):
     # Read history from training_result, output training charts there
     training_result_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
                                        "training_result", f"scenario{args.scenario}")
-    history_dir = os.path.join(training_result_dir, "history")
+    history_dir = os.path.join(training_result_dir, "checkpoints")  # History in checkpoints
     media_dir = os.path.join(training_result_dir, "media")
     os.makedirs(media_dir, exist_ok=True)
     
