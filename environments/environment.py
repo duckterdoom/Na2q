@@ -410,6 +410,8 @@ class DSNEnv(gym.Env):
         sensor_pos = self.sensor_positions[sensor_idx]
         sensor_angle = self.sensor_angles[sensor_idx]
         
+        # Collect observation tuples for all targets
+        target_obs_list = []
         for j in range(self.n_targets):
             target_pos = self.target_positions[j]
             diff = target_pos - sensor_pos
@@ -423,7 +425,15 @@ class DSNEnv(gym.Env):
             rho_norm = rho / (self.field_size * np.sqrt(2))
             alpha_norm = alpha / np.pi
             
-            obs.extend([i_norm, j_norm, rho_norm, alpha_norm])
+            # Store tuple: (distance_for_sorting, [obs_values])
+            target_obs_list.append((rho, [i_norm, j_norm, rho_norm, alpha_norm]))
+        
+        # Sort targets by distance
+        target_obs_list.sort(key=lambda x: x[0])
+        
+        # Flatten sorted observations
+        for _, obs_values in target_obs_list:
+            obs.extend(obs_values)
         
         return np.array(obs, dtype=np.float32)
     

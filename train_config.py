@@ -49,10 +49,10 @@ DEFAULT_STRONG_GPU_PRESETS: Dict[int, Dict] = {
     },
     2: {
         "device": "cuda",
-        "num_envs": 32,     # REDUCED: 50 sensors is 10x compute. 32 envs is safe.
-        "episodes": 20000,  # Swarm learns faster
-        "batch_size": 1024, # High throughput
-        "lr": 3.0e-4,
+        "num_envs": 60,     # CPU: EPYC 64-Core (Unleashed)
+        "episodes": 20000,
+        "batch_size": 256,  # GPU: 256 Eps (Safe VRAM ~1.5GB). Good throughput.
+        "lr": 5.0e-4,       # Scaled LR
         "gamma": 0.99,
         "epsilon_start": 1.0,
         "epsilon_end": 0.05,
@@ -61,11 +61,11 @@ DEFAULT_STRONG_GPU_PRESETS: Dict[int, Dict] = {
         "eval_interval": 1000,
         "eval_episodes": 20,
         "save_interval": 5000,
-        "buffer_capacity": 500000,
+        "buffer_capacity": 20, # RAM: Effective 600 Eps = ~6GB RAM. Safe.
         "chunk_length": 100,
-        "updates_per_step": 8, # SYNCED with 32 envs
-        "learning_starts": 100,
-        "no_amp": False,  # keep AMP/TF32 enabled
+        "updates_per_step": 4,  # Ratio ~17x (Prevent Overfitting on small buffer)
+        "learning_starts": 200,
+        "no_amp": False,
     },
     # Fallback preset for any other scenario IDs
     0: {
