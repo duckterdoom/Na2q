@@ -43,7 +43,7 @@ TRAINING_PRESETS: Dict[int, Dict] = {
     # -------------------------------------------------------------------------
     2: {
         "device": "cuda",
-        "num_envs": 1,          # Single-threaded to avoid freeze
+        "num_envs": 1,         
         "episodes": 20000,
         "batch_size": 32,
         "lr": 3.0e-4,
@@ -59,30 +59,6 @@ TRAINING_PRESETS: Dict[int, Dict] = {
         "chunk_length": 100,
         "updates_per_step": 4,
         "learning_starts": 50,
-        "no_amp": False,
-    },
-    
-    # -------------------------------------------------------------------------
-    # Scenario 99: Quick test / sanity check
-    # -------------------------------------------------------------------------
-    99: {
-        "device": "cuda",
-        "num_envs": 64,
-        "episodes": 2000,
-        "batch_size": 1024,
-        "lr": 3.0e-4,
-        "gamma": 0.99,
-        "epsilon_start": 1.0,
-        "epsilon_end": 0.05,
-        "epsilon_decay": 1000,
-        "target_update": 200,
-        "eval_interval": 200,
-        "eval_episodes": 10,
-        "save_interval": 1000,
-        "buffer_capacity": 200000,
-        "chunk_length": 100,
-        "updates_per_step": 64,
-        "learning_starts": 100,
         "no_amp": False,
     },
     
