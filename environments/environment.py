@@ -1,16 +1,10 @@
 """
-Directional Sensor Network (DSN) Environment for Multi-Agent Reinforcement Learning.
+Directional Sensor Network (DSN) Environment.
 
-Based on EXPERIMENT ENVIRONMENT specification:
-- Problem: Tracking randomly moving targets in WMSN/DSN
-- Dec-POMDP formulation: ⟨N, S, {Ai}, {Oi}, R, Pr, Z⟩
-- Observation: oij = (i, j, ρij, αij) in polar coordinates
-- Actions: TurnLeft (-5°), Stay, TurnRight (+5°)
-- Goal: Maximize number of tracked targets
-
-Scenarios:
-- Scenario 1: 3×3 grid, 5 sensors (cells 1,3,5,7,9), 6 targets, ρmax=18m
-- Scenario 2: 10×10 grid, 50 sensors (50% probability), 60 targets, ρmax=18m
+A Gymnasium-based environment for multi-agent target tracking:
+- Sensors with directional FoV track randomly moving targets
+- Dec-POMDP formulation for MARL training
+- Supports Scenario 1 (small) and Scenario 2 (large)
 """
 
 import numpy as np
@@ -22,15 +16,23 @@ from matplotlib.patches import Wedge
 import matplotlib.patches as mpatches
 
 
+# =============================================================================
+# DSN Environment
+# =============================================================================
+
 class DSNEnv(gym.Env):
     """Directional Sensor Network Environment for Target Tracking."""
     
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
     
-    # Action constants
-    ACTION_TURN_LEFT = 0   # δi,t+1 = δi,t - 5°
-    ACTION_STAY = 1        # δi,t+1 = δi,t
-    ACTION_TURN_RIGHT = 2  # δi,t+1 = δi,t + 5°
+    # Actions
+    ACTION_TURN_LEFT = 0
+    ACTION_STAY = 1
+    ACTION_TURN_RIGHT = 2
+    
+    # -------------------------------------------------------------------------
+    # Initialization
+    # -------------------------------------------------------------------------
     
     def __init__(
         self,
@@ -38,12 +40,12 @@ class DSNEnv(gym.Env):
         n_sensors: Optional[int] = None,
         n_targets: Optional[int] = None,
         grid_size: Optional[int] = None,
-        cell_size: float = 20.0,          # 20m × 20m per cell
-        sensing_range: float = 18.0,       # ρmax = 18m (Strict compliance with spec)
-        fov_angle: float = 60.0,           # αmax = 60°
-        rotation_step: float = 5.0,        # ±5° per action
+        cell_size: float = 20.0,
+        sensing_range: float = 18.0,
+        fov_angle: float = 60.0,
+        rotation_step: float = 5.0,
         max_steps: int = 100,
-        target_speed_range: Tuple[float, float] = (0.3, 0.7),  # Matched to HiT-MAC proportions
+        target_speed_range: Tuple[float, float] = (0.3, 0.7),
         render_mode: Optional[str] = None,
         seed: Optional[int] = None,
     ):
@@ -57,62 +59,59 @@ class DSNEnv(gym.Env):
         self.max_steps = max_steps
         self.target_speed_range = target_speed_range
         self.render_mode = render_mode
-        self.difficulty_level = 1.0  # Default to full difficulty for Curriculum Learning
+        self.difficulty_level = 1.0
         
-        # Configure scenario from EXPERIMENT ENVIRONMENT spec
+        # Configure scenario
         if scenario == 1:
-            # Small-scale: 3×3 grid, 5 sensors at cells 1,3,5,7,9, 6 targets
-            self.grid_size = grid_size if grid_size else 3
-            self.n_sensors = n_sensors if n_sensors else 5
-            self.n_targets = n_targets if n_targets else 6
+            self.grid_size = grid_size or 3
+            self.n_sensors = n_sensors or 5
+            self.n_targets = n_targets or 6
         elif scenario == 2:
-            # Large-scale: 10×10 grid, 50 sensors (50% probability), 60 targets
-            self.grid_size = grid_size if grid_size else 10
-            self.n_sensors = n_sensors if n_sensors else 50
-            self.n_targets = n_targets if n_targets else 60
+            self.grid_size = grid_size or 10
+            self.n_sensors = n_sensors or 50
+            self.n_targets = n_targets or 60
         else:
-            self.grid_size = grid_size if grid_size else 3
-            self.n_sensors = n_sensors if n_sensors else 5
-            self.n_targets = n_targets if n_targets else 6
+            self.grid_size = grid_size or 3
+            self.n_sensors = n_sensors or 5
+            self.n_targets = n_targets or 6
         
         self.field_size = self.grid_size * self.cell_size
         self.np_random = np.random.default_rng(seed)
         
-        # Action space: 3 discrete actions (TurnLeft, Stay, TurnRight)
+        # Spaces
         self.n_actions = 3
         self.action_space = spaces.Discrete(self.n_actions)
         
-        # Observation space: oij = (i, j, ρij, αij) for each target
-        # obs_dim = n_targets × 4
         self.obs_per_target = 4
         self.obs_dim = self.n_targets * self.obs_per_target
-        self.observation_space = spaces.Box(
-            low=-np.inf, high=np.inf, shape=(self.obs_dim,), dtype=np.float32
-        )
+        self.observation_space = spaces.Box(low=-np.inf, high=np.inf, shape=(self.obs_dim,), dtype=np.float32)
         
-        # State dimension for centralized training
-        # sensors: (x, y, angle) × n_sensors + targets: (x, y) × n_targets
         self.state_dim = self.n_sensors * 3 + self.n_targets * 2
         
-        # State variables
+        # State
         self.sensor_positions = None
         self.sensor_angles = None
         self.target_positions = None
         self.target_velocities = None
-        self.goal_map = None  # n × m binary matrix
+        self.goal_map = None
         self.current_step = 0
         
         # Rendering
         self.fig = None
         self.ax = None
     
-    def _get_scenario1_sensor_positions(self) -> np.ndarray:
-        """
-        Scenario 1: Sensors at centers of cells 1, 3, 5, 7, 9.
-        Grid layout:  7 8 9
-                      4 5 6
-                      1 2 3
-        """
+    # -------------------------------------------------------------------------
+    # Sensor Placement
+    # -------------------------------------------------------------------------
+    
+    def _initialize_sensor_positions(self) -> np.ndarray:
+        if self.scenario == 1:
+            return self._get_scenario1_positions()
+        else:
+            return self._get_scenario2_positions()
+    
+    def _get_scenario1_positions(self) -> np.ndarray:
+        """Scenario 1: Sensors at cells 1, 3, 5, 7, 9."""
         cell_centers = {1: (0, 0), 3: (2, 0), 5: (1, 1), 7: (0, 2), 9: (2, 2)}
         positions = []
         for cell_num in [1, 3, 5, 7, 9]:
@@ -122,8 +121,8 @@ class DSNEnv(gym.Env):
             positions.append([x, y])
         return np.array(positions[:self.n_sensors])
     
-    def _get_scenario2_sensor_positions(self) -> np.ndarray:
-        """Scenario 2: Probabilistic placement with 50% threshold."""
+    def _get_scenario2_positions(self) -> np.ndarray:
+        """Scenario 2: Random placement with 50% probability."""
         positions = []
         for row in range(self.grid_size):
             for col in range(self.grid_size):
@@ -134,7 +133,6 @@ class DSNEnv(gym.Env):
         
         positions = np.array(positions) if positions else np.zeros((0, 2))
         
-        # Ensure exactly n_sensors
         if len(positions) > self.n_sensors:
             indices = self.np_random.choice(len(positions), self.n_sensors, replace=False)
             positions = positions[indices]
@@ -149,31 +147,20 @@ class DSNEnv(gym.Env):
         
         return positions[:self.n_sensors]
     
-    def _initialize_sensor_positions(self) -> np.ndarray:
-        if self.scenario == 1:
-            return self._get_scenario1_sensor_positions()
-        else:
-            return self._get_scenario2_sensor_positions()
+    # -------------------------------------------------------------------------
+    # Target Management
+    # -------------------------------------------------------------------------
     
-
-        
     def set_curriculum_difficulty(self, level: float):
-        """
-        Set curriculum difficulty level (0.0 to 1.0).
-        0.0 -> Speed [0.1, 0.2] (Slow)
-        1.0 -> Speed [0.3, 0.7] (Fast)
-        """
+        """Set curriculum difficulty (0.0 = slow targets, 1.0 = fast targets)."""
         self.difficulty_level = np.clip(level, 0.0, 1.0)
     
     def _initialize_targets(self) -> Tuple[np.ndarray, np.ndarray]:
-        """Initialize randomly moving targets with unpredictable paths."""
+        """Initialize randomly moving targets."""
         margin = self.cell_size * 0.1
         positions = self.np_random.uniform(margin, self.field_size - margin, (self.n_targets, 2))
         
-        # Curriculum Learning: Scale speed based on difficulty level
-        # Base speed range: [0.3, 0.7]
-        # Easy speed range: [0.1, 0.2]
-        # We interpolate between limits based on difficulty
+        # Scale speed by difficulty
         min_speed = 0.1 + (self.target_speed_range[0] - 0.1) * self.difficulty_level
         max_speed = 0.2 + (self.target_speed_range[1] - 0.2) * self.difficulty_level
         
@@ -183,87 +170,10 @@ class DSNEnv(gym.Env):
         
         return positions, velocities
     
-    def reset(self, seed: Optional[int] = None, options: Optional[dict] = None) -> Tuple[List[np.ndarray], dict]:
-        if seed is not None:
-            self.np_random = np.random.default_rng(seed)
-        
-        self.sensor_positions = self._initialize_sensor_positions()
-        self.target_positions, self.target_velocities = self._initialize_targets()
-        
-        # Initial Heuristic: Initialize angles to point AT nearest target 
-        # This simulates a "Good Deployment" where sensors are manually aimed at start.
-        angles = []
-        for i in range(self.n_sensors):
-            obs_pos = self.sensor_positions[i]
-            # Find nearest target
-            dists = [np.linalg.norm(self.target_positions[j] - obs_pos) for j in range(self.n_targets)]
-            nearest_idx = np.argmin(dists)
-            diff = self.target_positions[nearest_idx] - obs_pos
-            angle = np.arctan2(diff[1], diff[0])
-            angles.append(angle)
-        self.sensor_angles = np.array(angles)
-        
-        self.goal_map = np.zeros((self.n_sensors, self.n_targets), dtype=np.int32)
-        self.current_step = 0
-        
-        observations = self._get_observations()
-        info = self._get_info()
-        
-        return observations, info
-    
-    def step(self, actions: List[int]) -> Tuple[List[np.ndarray], float, bool, bool, dict]:
-        """Execute actions: TurnLeft (-5°), Stay (0°), TurnRight (+5°)."""
-        # Validate actions to prevent crashes during long training
-        if len(actions) != self.n_sensors:
-            raise ValueError(f"Expected {self.n_sensors} actions, got {len(actions)}")
-        
-        # Validate action values are in valid range
-        for i, action in enumerate(actions):
-            if action not in [self.ACTION_TURN_LEFT, self.ACTION_STAY, self.ACTION_TURN_RIGHT]:
-                # Default to STAY if invalid action (prevents crash)
-                actions[i] = self.ACTION_STAY
-        
-        # Apply rotation actions
-        for i, action in enumerate(actions):
-            if action == self.ACTION_TURN_LEFT:
-                delta = -self.rotation_step
-            elif action == self.ACTION_TURN_RIGHT:
-                delta = self.rotation_step
-            else:
-                delta = 0
-            self.sensor_angles[i] = (self.sensor_angles[i] + delta) % (2 * np.pi)
-        
-        # Update targets (random movement)
-        self._update_targets()
-        self._update_goal_map()
-        
-        self.current_step += 1
-        
-        reward, info = self._calculate_reward()
-        
-        # Rotation cost penalty (matching HiT-MAC)
-        # Penalize sensors that rotate, encouraging stable tracking
-        rotation_cost = 0
-        for action in actions:
-            if action != self.ACTION_STAY:
-                # Rotation cost (removed to prevent lazy agent cycle)
-                pass
-        reward -= 0.0
-        info["rotation_cost"] = rotation_cost
-        
-        terminated = False
-        truncated = self.current_step >= self.max_steps
-        
-        observations = self._get_observations()
-        info.update(self._get_info())
-        
-        return observations, reward, terminated, truncated, info
-    
     def _update_targets(self):
-        """Update target positions with random velocities and bouncing."""
+        """Update target positions with bouncing."""
         self.target_positions += self.target_velocities
         
-        # Bounce off boundaries
         for i in range(self.n_targets):
             for d in range(2):
                 if self.target_positions[i, d] < 0:
@@ -273,27 +183,76 @@ class DSNEnv(gym.Env):
                     self.target_positions[i, d] = 2 * self.field_size - self.target_positions[i, d]
                     self.target_velocities[i, d] = -self.target_velocities[i, d]
         
-        # Random direction changes (unpredictable paths)
+        # Random direction changes
         for i in range(self.n_targets):
             if self.np_random.random() < 0.1:
                 angle = self.np_random.uniform(0, 2 * np.pi)
                 speed = np.linalg.norm(self.target_velocities[i])
                 self.target_velocities[i] = [speed * np.cos(angle), speed * np.sin(angle)]
     
-    def _is_target_tracked(self, sensor_idx: int, target_idx: int) -> bool:
-        """Check if target is within sensor's FoV (ρ ≤ ρmax and |α| ≤ αmax/2)."""
-        sensor_pos = self.sensor_positions[sensor_idx]
-        sensor_angle = self.sensor_angles[sensor_idx]
-        target_pos = self.target_positions[target_idx]
+    # -------------------------------------------------------------------------
+    # Core Environment Methods
+    # -------------------------------------------------------------------------
+    
+    def reset(self, seed: Optional[int] = None, options: Optional[dict] = None) -> Tuple[List[np.ndarray], dict]:
+        if seed is not None:
+            self.np_random = np.random.default_rng(seed)
         
-        diff = target_pos - sensor_pos
+        self.sensor_positions = self._initialize_sensor_positions()
+        self.target_positions, self.target_velocities = self._initialize_targets()
+        
+        # Initialize angles to point at nearest target
+        angles = []
+        for i in range(self.n_sensors):
+            dists = [np.linalg.norm(self.target_positions[j] - self.sensor_positions[i]) 
+                     for j in range(self.n_targets)]
+            nearest_idx = np.argmin(dists)
+            diff = self.target_positions[nearest_idx] - self.sensor_positions[i]
+            angles.append(np.arctan2(diff[1], diff[0]))
+        self.sensor_angles = np.array(angles)
+        
+        self.goal_map = np.zeros((self.n_sensors, self.n_targets), dtype=np.int32)
+        self.current_step = 0
+        
+        return self._get_observations(), self._get_info()
+    
+    def step(self, actions: List[int]) -> Tuple[List[np.ndarray], float, bool, bool, dict]:
+        """Execute actions and return next state."""
+        if len(actions) != self.n_sensors:
+            raise ValueError(f"Expected {self.n_sensors} actions, got {len(actions)}")
+        
+        # Apply rotations
+        for i, action in enumerate(actions):
+            if action == self.ACTION_TURN_LEFT:
+                self.sensor_angles[i] -= self.rotation_step
+            elif action == self.ACTION_TURN_RIGHT:
+                self.sensor_angles[i] += self.rotation_step
+            self.sensor_angles[i] = self.sensor_angles[i] % (2 * np.pi)
+        
+        self._update_targets()
+        self._update_goal_map()
+        self.current_step += 1
+        
+        reward, info = self._calculate_reward()
+        terminated = False
+        truncated = self.current_step >= self.max_steps
+        
+        return self._get_observations(), reward, terminated, truncated, info
+    
+    # -------------------------------------------------------------------------
+    # Tracking Logic
+    # -------------------------------------------------------------------------
+    
+    def _is_target_tracked(self, sensor_idx: int, target_idx: int) -> bool:
+        """Check if target is within sensor's FoV."""
+        diff = self.target_positions[target_idx] - self.sensor_positions[sensor_idx]
         rho = np.linalg.norm(diff)
         
         if rho > self.sensing_range:
             return False
         
         angle_to_target = np.arctan2(diff[1], diff[0])
-        alpha = self._normalize_angle(angle_to_target - sensor_angle)
+        alpha = self._normalize_angle(angle_to_target - self.sensor_angles[sensor_idx])
         
         return abs(alpha) <= self.fov_angle / 2
     
@@ -305,133 +264,83 @@ class DSNEnv(gym.Env):
         return angle
     
     def _update_goal_map(self):
-        """Update goal map (n × m binary matrix): gij = 1 if target j tracked by sensor i."""
+        """Update goal map: gij = 1 if target j tracked by sensor i."""
         self.goal_map = np.zeros((self.n_sensors, self.n_targets), dtype=np.int32)
         for i in range(self.n_sensors):
             for j in range(self.n_targets):
                 if self._is_target_tracked(i, j):
                     self.goal_map[i, j] = 1
     
+    # -------------------------------------------------------------------------
+    # Reward Calculation
+    # -------------------------------------------------------------------------
+    
     def _calculate_reward(self) -> Tuple[float, dict]:
-        """
-        Calculate team reward: maximize number of tracked targets.
-        
-        Following NA2Q framework (Liu et al., ICML 2023):
-        - Reward structure is environment-specific and task-dependent
-        - For target tracking: reward should scale with coverage rate
-        - Linear scaling: reward per step = coverage_rate
-        - This ensures: 50% coverage → 0.5 per step → 50 per episode (100 steps)
-        - 100% coverage → 1.0 per step → 100 per episode
-        
-        This reward design:
-        - Provides clear learning signal proportional to performance
-        - Scales appropriately for Q-learning (rewards in [0, 1] range)
-        - Matches standard MARL reward practices for cooperative tasks
-        - Compatible with NA2Q value decomposition framework
-        
-        Reference: NA2Q paper (Liu et al., ICML 2023)
-        https://proceedings.mlr.press/v202/liu23be.html
-        """
+        """Calculate team reward based on coverage."""
         targets_tracked = np.any(self.goal_map, axis=0)
         n_tracked = np.sum(targets_tracked)
         coverage_rate = n_tracked / self.n_targets
         
-        # LINEAR REWARD: reward per step = coverage_rate
-        # This ensures proper scaling:
-        # - 0% coverage → 0.0 per step → 0 per episode
-        # - 50% coverage → 0.5 per step → 50 per episode
-        # - 100% coverage → 1.0 per step → 100 per episode
+        # Base reward = coverage rate
         reward = coverage_rate
         
-        # Reward shaping - MUCH STRONGER bonuses to break out of local optimum
-        # Full coverage bonus
+        # Bonuses for high coverage
         if n_tracked == self.n_targets:
-            reward = reward + 1.0  # Very strong bonus for full coverage (was 0.5)
-        # High coverage bonus (>= 80%)
+            reward += 1.0
         elif coverage_rate >= 0.8:
-            reward = reward + 0.6  # Strong bonus for high coverage (was 0.3)
-        # Medium coverage bonus (>= 50%)
+            reward += 0.6
         elif coverage_rate >= 0.5:
-            reward = reward + 0.2  # Better bonus for reaching 50%+ (was 0.1)
-            
-        # Alignment Reward: Sensors are STATIC.
-        # We reward minimizing the angle difference to the nearest target (Active Tracking).
+            reward += 0.2
         
+        # Centering bonus (reward for pointing at targets)
         centering_bonus = 0.0
         for i in range(self.n_sensors):
-            sensor_pos = self.sensor_positions[i]
-            sensor_angle = self.sensor_angles[i]
-            
-            # Find nearest target
-            dists = [np.linalg.norm(self.target_positions[j] - sensor_pos) for j in range(self.n_targets)]
+            dists = [np.linalg.norm(self.target_positions[j] - self.sensor_positions[i]) 
+                     for j in range(self.n_targets)]
             nearest_idx = np.argmin(dists)
-            min_dist = dists[nearest_idx]
             
-            # Calculate angle to this target
-            diff = self.target_positions[nearest_idx] - sensor_pos
+            diff = self.target_positions[nearest_idx] - self.sensor_positions[i]
             angle_to_target = np.arctan2(diff[1], diff[0])
-            # Normalize difference to [-pi, pi]
-            angle_diff = angle_to_target - sensor_angle
-            angle_diff = (angle_diff + np.pi) % (2 * np.pi) - np.pi
+            angle_diff = (angle_to_target - self.sensor_angles[i] + np.pi) % (2 * np.pi) - np.pi
             
-            # Reward: 1.0 if perfectly aligned, 0.0 if 180 degrees away
-            # alignment_quality = (np.pi - abs(angle_diff)) / np.pi
-            # Stronger Reward: Use Cosine alignment (1.0 aligned, -1.0 opposite)
             alignment_quality = np.cos(angle_diff)
-            
-            # Add to total bonus ("Compass Hint")
-            # Normalized: Max total bonus is 1.0 regardless of sensor count
-            # S1 (5 sensors) -> 0.2 per sensor
-            # S2 (50 sensors) -> 0.02 per sensor
             centering_bonus += alignment_quality * (1.0 / self.n_sensors)
-                
+        
         reward += centering_bonus
         
         info = {"n_tracked": n_tracked, "coverage_rate": coverage_rate, "goal_map": self.goal_map.copy()}
         return reward, info
     
+    # -------------------------------------------------------------------------
+    # Observations
+    # -------------------------------------------------------------------------
+    
     def _get_observations(self) -> List[np.ndarray]:
-        """Get observations for all agents: oi = (oi1, oi2, ..., oim)."""
-        observations = []
-        for i in range(self.n_sensors):
-            obs = self._get_agent_observation(i)
-            observations.append(obs)
-        return observations
+        """Get observations for all agents."""
+        return [self._get_agent_observation(i) for i in range(self.n_sensors)]
     
     def _get_agent_observation(self, sensor_idx: int) -> np.ndarray:
-        """
-        Get observation for sensor i: oij = (i, j, ρij, αij).
-        - i = sensor ID (normalized)
-        - j = target ID (normalized)
-        - ρij = absolute distance (normalized)
-        - αij = relative angle (normalized)
-        """
-        obs = []
+        """Get observation for sensor i, sorted by distance."""
         sensor_pos = self.sensor_positions[sensor_idx]
         sensor_angle = self.sensor_angles[sensor_idx]
         
-        # Collect observation tuples for all targets
         target_obs_list = []
         for j in range(self.n_targets):
-            target_pos = self.target_positions[j]
-            diff = target_pos - sensor_pos
+            diff = self.target_positions[j] - sensor_pos
             rho = np.linalg.norm(diff)
-            angle_to_target = np.arctan2(diff[1], diff[0])
-            alpha = self._normalize_angle(angle_to_target - sensor_angle)
+            alpha = self._normalize_angle(np.arctan2(diff[1], diff[0]) - sensor_angle)
             
-            # Normalize values
             i_norm = sensor_idx / max(self.n_sensors - 1, 1)
             j_norm = j / max(self.n_targets - 1, 1)
             rho_norm = rho / (self.field_size * np.sqrt(2))
             alpha_norm = alpha / np.pi
             
-            # Store tuple: (distance_for_sorting, [obs_values])
             target_obs_list.append((rho, [i_norm, j_norm, rho_norm, alpha_norm]))
         
-        # Sort targets by distance
+        # Sort by distance
         target_obs_list.sort(key=lambda x: x[0])
         
-        # Flatten sorted observations
+        obs = []
         for _, obs_values in target_obs_list:
             obs.extend(obs_values)
         
@@ -460,8 +369,12 @@ class DSNEnv(gym.Env):
         }
     
     def get_avail_actions(self) -> List[np.ndarray]:
-        """Get available actions (all actions always available)."""
+        """Get available actions (all always available)."""
         return [np.ones(self.n_actions, dtype=np.float32) for _ in range(self.n_sensors)]
+    
+    # -------------------------------------------------------------------------
+    # Rendering
+    # -------------------------------------------------------------------------
     
     def render(self):
         if self.render_mode is None:
@@ -480,7 +393,7 @@ class DSNEnv(gym.Env):
         
         self.ax.set_title(
             f'Step: {self.current_step} | Tracked: {n_tracked}/{self.n_targets} ({100*n_tracked/self.n_targets:.1f}%)\n'
-            f'Scenario {self.scenario}: {self.grid_size}×{self.grid_size} grid, {self.n_sensors} sensors, {self.n_targets} targets'
+            f'Scenario {self.scenario}: {self.grid_size}×{self.grid_size} grid'
         )
         
         # Draw grid
@@ -500,12 +413,7 @@ class DSNEnv(gym.Env):
             wedge = Wedge(pos, self.sensing_range, angle - np.degrees(self.fov_angle) / 2,
                          angle + np.degrees(self.fov_angle) / 2, alpha=0.2, color=color)
             self.ax.add_patch(wedge)
-            self.ax.plot(pos[0], pos[1], 'o', color=color, markersize=8, markeredgecolor='black', markeredgewidth=1)
-            
-            arrow_len = self.sensing_range * 0.3
-            dx = arrow_len * np.cos(self.sensor_angles[i])
-            dy = arrow_len * np.sin(self.sensor_angles[i])
-            self.ax.arrow(pos[0], pos[1], dx, dy, head_width=1, head_length=0.5, fc=color, ec='black')
+            self.ax.plot(pos[0], pos[1], 'o', color=color, markersize=8, markeredgecolor='black')
         
         # Draw targets
         for j in range(self.n_targets):
@@ -528,9 +436,7 @@ class DSNEnv(gym.Env):
             self.fig.canvas.draw()
             buf = np.frombuffer(self.fig.canvas.tostring_argb(), dtype=np.uint8)
             buf = buf.reshape(self.fig.canvas.get_width_height()[::-1] + (4,))
-            # Convert ARGB to RGB
-            img = buf[:, :, [1, 2, 3]]
-            return img
+            return buf[:, :, [1, 2, 3]]
     
     def close(self):
         if self.fig is not None:
@@ -539,7 +445,10 @@ class DSNEnv(gym.Env):
             self.ax = None
 
 
+# =============================================================================
+# Factory Function
+# =============================================================================
+
 def make_env(scenario: int = 1, **kwargs) -> DSNEnv:
     """Create DSN environment."""
     return DSNEnv(scenario=scenario, **kwargs)
-
