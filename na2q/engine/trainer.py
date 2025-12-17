@@ -236,8 +236,9 @@ class Trainer:
 
     def _training_step(self, batch_size, learning_starts, total_episodes):
         loss = 0.0
-        total_transitions = total_episodes * self.max_steps
-        if self.buffer.can_sample(batch_size) and total_transitions >= learning_starts:
+        # Fix: Check episodes, not transitions. And ensure buffer has enough samples.
+        can_train = len(self.buffer) >= batch_size and total_episodes >= learning_starts
+        if can_train:
             n_updates = self.config.get("updates_per_step", 1)
             total_loss = 0.0
             

@@ -51,7 +51,7 @@ DEFAULT_STRONG_GPU_PRESETS: Dict[int, Dict] = {
         "device": "cuda",
         "num_envs": 28,     # CPU: 28/32 cores
         "episodes": 20000,
-        "batch_size": 32,   # REDUCED to prevent freeze
+        "batch_size": 64,   # Safe batch size
         "lr": 3.0e-4,
         "gamma": 0.99,
         "epsilon_start": 1.0,
@@ -61,10 +61,10 @@ DEFAULT_STRONG_GPU_PRESETS: Dict[int, Dict] = {
         "eval_interval": 1000,
         "eval_episodes": 20,
         "save_interval": 5000,
-        "buffer_capacity": 50, # REDUCED to prevent memory issues
+        "buffer_capacity": 100, # Buffer holds 100 * 14 = 1400 episodes
         "chunk_length": 100,
         "updates_per_step": 4,
-        "learning_starts": 32, # Start training almost immediately
+        "learning_starts": 64, # Wait for 64 episodes before training
         "no_amp": False,
     },
     # Fallback preset for any other scenario IDs
