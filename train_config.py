@@ -49,9 +49,9 @@ DEFAULT_STRONG_GPU_PRESETS: Dict[int, Dict] = {
     },
     2: {
         "device": "cuda",
-        "num_envs": 28,     # CPU: 28/32 cores (leaves headroom)
+        "num_envs": 28,     # CPU: 28/32 cores
         "episodes": 20000,
-        "batch_size": 128,  # GPU: Safe for 12GB VRAM (~3GB usage)
+        "batch_size": 32,   # REDUCED to prevent freeze
         "lr": 3.0e-4,
         "gamma": 0.99,
         "epsilon_start": 1.0,
@@ -61,10 +61,10 @@ DEFAULT_STRONG_GPU_PRESETS: Dict[int, Dict] = {
         "eval_interval": 1000,
         "eval_episodes": 20,
         "save_interval": 5000,
-        "buffer_capacity": 300, # ~4200 eps. Safe for most RAM.
+        "buffer_capacity": 50, # REDUCED to prevent memory issues
         "chunk_length": 100,
-        "updates_per_step": 8,
-        "learning_starts": 200,
+        "updates_per_step": 4,
+        "learning_starts": 32, # Start training almost immediately
         "no_amp": False,
     },
     # Fallback preset for any other scenario IDs
