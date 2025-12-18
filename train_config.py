@@ -32,7 +32,7 @@ TRAINING_PRESETS: Dict[int, Dict] = {
         "eval_episodes": 20,
         "save_interval": 5000,
         "buffer_capacity": 100000,   # Reduced for less memory
-        "chunk_length": 100,
+        "chunk_length": 25,
         "updates_per_step": 1,       # Single update per episode
         "learning_starts": 100,      # Wait for buffer to fill
         "no_amp": False,
@@ -56,7 +56,7 @@ TRAINING_PRESETS: Dict[int, Dict] = {
         "eval_episodes": 10,
         "save_interval": 2000,
         "buffer_capacity": 50000,    # Experience diversity
-        "chunk_length": 100,
+        "chunk_length": 25,
         "updates_per_step": 1,      # Single update per episode
         "learning_starts": 100,     # Wait for buffer to fill
         "no_amp": False,
@@ -80,7 +80,7 @@ TRAINING_PRESETS: Dict[int, Dict] = {
         "save_interval": 200,
         "buffer_capacity": 100000,
         "updates_per_step": 1,
-        "chunk_length": 100,
+        "chunk_length": 25,
         "no_amp": False,
     },
 }
