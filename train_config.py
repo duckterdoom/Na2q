@@ -19,14 +19,14 @@ TRAINING_PRESETS: Dict[int, Dict] = {
     # -------------------------------------------------------------------------
     1: {
         "device": "cuda",
-        "num_envs": 64,
-        "episodes": 40000,
+        "num_envs": 16,              # Reduced from 64 for stability
+        "episodes": 30000,           # Reduced from 40000
         "batch_size": 1024,
         "lr": 3.0e-4,
         "gamma": 0.99,
         "epsilon_start": 1.0,
         "epsilon_end": 0.05,
-        "epsilon_decay": 5000,
+        "epsilon_decay": 4000,       # Adjusted for 30k episodes (faster exploitation)
         "target_update": 200,
         "eval_interval": 2000,
         "eval_episodes": 20,

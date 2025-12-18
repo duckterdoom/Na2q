@@ -13,7 +13,11 @@ import numpy as np
 from multiprocessing import Process, Pipe
 from typing import List, Tuple, Dict, Optional, Any
 import cloudpickle
+import time
 from environments.environment import DSNEnv, make_env
+
+# Timeout for pipe operations (seconds)
+PIPE_TIMEOUT = 30.0
 
 
 def worker(remote, parent_remote, env_fn_wrapper):
@@ -185,6 +189,19 @@ class ParallelEnv:
         self.n_targets = self.env_info["n_targets"]
         self.grid_size = self.env_info["grid_size"]
     
+    def _recv_with_timeout(self, remote, timeout=PIPE_TIMEOUT):
+        """Receive with timeout to prevent indefinite blocking."""
+        if remote.poll(timeout):
+            return remote.recv()
+        else:
+            raise TimeoutError(f"Worker did not respond within {timeout}s")
+    
+    def _check_workers_alive(self):
+        """Check if all worker processes are still alive."""
+        for i, p in enumerate(self.processes):
+            if not p.is_alive():
+                raise RuntimeError(f"Worker {i} died unexpectedly")
+    
     def reset(self, seeds: Optional[List[int]] = None) -> Tuple[np.ndarray, np.ndarray, List[dict], np.ndarray]:
         """
         Reset all environments.
@@ -198,10 +215,11 @@ class ParallelEnv:
         if seeds is None:
             seeds = [None] * self.num_envs
             
+        self._check_workers_alive()
         for remote, seed in zip(self.remotes, seeds):
             remote.send(("reset", seed))
         
-        results = [remote.recv() for remote in self.remotes]
+        results = [self._recv_with_timeout(remote) for remote in self.remotes]
         
         observations = np.stack([r[0] for r in results])  # [num_envs, n_agents, obs_dim]
         states = np.stack([r[1] for r in results])  # [num_envs, state_dim]
@@ -226,10 +244,11 @@ class ParallelEnv:
             infos: List of info dicts
             avail_actions: [num_envs, n_agents, n_actions]
         """
+        self._check_workers_alive()
         for remote, action in zip(self.remotes, actions):
             remote.send(("step", action.tolist()))
         
-        results = [remote.recv() for remote in self.remotes]
+        results = [self._recv_with_timeout(remote) for remote in self.remotes]
         
         observations = np.stack([r[0] for r in results])  # [num_envs, n_agents, obs_dim]
         states = np.stack([r[1] for r in results])  # [num_envs, state_dim]
@@ -249,7 +268,7 @@ class ParallelEnv:
     
     def step_wait(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, List[dict], np.ndarray]:
         """Wait for step results from all envs."""
-        results = [remote.recv() for remote in self.remotes]
+        results = [self._recv_with_timeout(remote) for remote in self.remotes]
         self.waiting = False
         
         observations = np.stack([r[0] for r in results])
@@ -268,7 +287,7 @@ class ParallelEnv:
             remote.send(("set_difficulty", level))
         # Consume acknowledgments to prevent pipe blocking
         for remote in self.remotes:
-            _ = remote.recv()
+            _ = self._recv_with_timeout(remote, timeout=5.0)  # Shorter timeout for ack
     
     def close(self):
         """Close all environments."""
