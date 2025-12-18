@@ -169,6 +169,9 @@ class Trainer:
                     total_episodes += 1
                     pbar.update(1)
                 
+                # Update epsilon based on episode count
+                self.agent.set_episode_count(total_episodes)
+                
                 # Curriculum
                 self._update_curriculum(total_episodes)
                 

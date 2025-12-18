@@ -187,10 +187,15 @@ class NA2QAgent:
     # Training
     # -------------------------------------------------------------------------
     
+    def set_episode_count(self, episode: int):
+        """Set current episode count for epsilon decay."""
+        self.episode_count = episode
+    
     def update_epsilon(self):
-        """Update epsilon with linear decay."""
-        if self.train_step < self.epsilon_decay:
-            self.epsilon = self.epsilon_end + (1.0 - self.epsilon_end) * (1.0 - self.train_step / self.epsilon_decay)
+        """Update epsilon based on episode count (not train steps)."""
+        episode = getattr(self, 'episode_count', 0)
+        if episode < self.epsilon_decay:
+            self.epsilon = self.epsilon_end + (1.0 - self.epsilon_end) * (1.0 - episode / self.epsilon_decay)
         else:
             self.epsilon = self.epsilon_end
     
@@ -310,8 +315,7 @@ class NA2QAgent:
         
         self.train_step += 1
         self.soft_update_target(tau=0.008)
-        self.q_scheduler.step()
-        self.vae_scheduler.step()
+        # Note: LR schedulers removed - constant LR is more stable for RL
         self.update_epsilon()
         
         return {
