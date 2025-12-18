@@ -85,8 +85,6 @@ class NA2QAgent:
         self.q_optimizer = torch.optim.RMSprop(q_params, lr=lr, alpha=0.99, eps=1e-5)
         self.vae_optimizer = torch.optim.Adam(vae_params, lr=lr, betas=(0.9, 0.999))
         
-        self.q_scheduler = torch.optim.lr_scheduler.StepLR(self.q_optimizer, step_size=15000, gamma=0.95)
-        self.vae_scheduler = torch.optim.lr_scheduler.StepLR(self.vae_optimizer, step_size=15000, gamma=0.95)
         self.scaler = GradScaler(enabled=self.use_amp)
         
         self.train_step = 0
@@ -291,7 +289,7 @@ class NA2QAgent:
         targets_clipped = torch.clamp(targets.detach(), -100.0, 400.0)
         td_loss = F.smooth_l1_loss(q_totals_clipped, targets_clipped)
         
-        warmup_steps = 5000
+        warmup_steps = 15000  # Aligned with epsilon_decay
         vae_weight = self.vae_loss_weight * min(1.0, self.train_step / warmup_steps)
         total_loss = td_loss + vae_weight * vae_loss
         
@@ -314,7 +312,7 @@ class NA2QAgent:
             self.vae_optimizer.step()
         
         self.train_step += 1
-        self.soft_update_target(tau=0.008)
+        self.soft_update_target(tau=0.001)  # Reduced for more stable updates
         # Note: LR schedulers removed - constant LR is more stable for RL
         self.update_epsilon()
         

@@ -26,7 +26,7 @@ TRAINING_PRESETS: Dict[int, Dict] = {
         "gamma": 0.99,
         "epsilon_start": 1.0,
         "epsilon_end": 0.05,
-        "epsilon_decay": 4000,       # Adjusted for 30k episodes
+        "epsilon_decay": 15000,      # Reach ε_end at 50% of training
         "target_update": 200,
         "eval_interval": 2000,
         "eval_episodes": 20,
@@ -50,7 +50,7 @@ TRAINING_PRESETS: Dict[int, Dict] = {
         "gamma": 0.99,
         "epsilon_start": 1.0,
         "epsilon_end": 0.05,
-        "epsilon_decay": 4000,      # Adjusted for 20k episodes
+        "epsilon_decay": 10000,     # Reach ε_end at 50% of training
         "target_update": 200,
         "eval_interval": 1000,
         "eval_episodes": 10,
