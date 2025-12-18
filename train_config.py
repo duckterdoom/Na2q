@@ -19,22 +19,22 @@ TRAINING_PRESETS: Dict[int, Dict] = {
     # -------------------------------------------------------------------------
     1: {
         "device": "cuda",
-        "num_envs": 16,              # Reduced from 64 for stability
+        "num_envs": 1,               # Single environment (no parallel)
         "episodes": 30000,           # Reduced from 40000
-        "batch_size": 1024,
+        "batch_size": 256,           # Reduced for faster updates
         "lr": 3.0e-4,
         "gamma": 0.99,
         "epsilon_start": 1.0,
         "epsilon_end": 0.05,
-        "epsilon_decay": 4000,       # Adjusted for 30k episodes (faster exploitation)
+        "epsilon_decay": 4000,       # Adjusted for 30k episodes
         "target_update": 200,
         "eval_interval": 2000,
         "eval_episodes": 20,
         "save_interval": 5000,
-        "buffer_capacity": 1000000,
+        "buffer_capacity": 100000,   # Reduced for less memory
         "chunk_length": 100,
-        "updates_per_step": 32,
-        "learning_starts": 100,
+        "updates_per_step": 2,       # Reduced from 32 for faster training
+        "learning_starts": 100,      # Wait for buffer to fill
         "no_amp": False,
     },
     
@@ -43,9 +43,9 @@ TRAINING_PRESETS: Dict[int, Dict] = {
     # -------------------------------------------------------------------------
     2: {
         "device": "cuda",
-        "num_envs": 4,              # Increased for faster data collection
+        "num_envs": 1,               # Single environment (no parallel)
         "episodes": 20000,
-        "batch_size": 64,           # Larger batch for stability
+        "batch_size": 128,           # Increased for better GPU utilization
         "lr": 1.0e-4,               # Lower LR for large network
         "gamma": 0.99,
         "epsilon_start": 1.0,
@@ -55,10 +55,10 @@ TRAINING_PRESETS: Dict[int, Dict] = {
         "eval_interval": 1000,
         "eval_episodes": 10,
         "save_interval": 2000,
-        "buffer_capacity": 2000,    # Larger buffer for more diversity
+        "buffer_capacity": 50000,    # Experience diversity
         "chunk_length": 100,
-        "updates_per_step": 8,      # More learning per data
-        "learning_starts": 100,
+        "updates_per_step": 2,      # Reduced from 8 for faster training
+        "learning_starts": 100,     # Wait for buffer to fill
         "no_amp": False,
     },
     

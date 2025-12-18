@@ -13,7 +13,7 @@ import glob
 
 from na2q.utils import EpisodeReplayBuffer, Logger, MetricsTracker, setup_experiment, get_device
 from na2q.models.agent import NA2QAgent
-from na2q.engine.collector import collect_episode, collect_episodes_parallel
+from na2q.engine.collector import collect_episode
 from environments.environment import make_env
 
 
@@ -48,7 +48,7 @@ class Trainer:
         self.seed = config.get("seed", 42)
         self.max_steps = config.get("max_steps", 100)
         self.env_kwargs = config.get("env_kwargs", {})
-        self.use_parallel = self.num_envs > 1
+        self.use_parallel = False  # Parallel env removed
         
         self._setup_environments()
         self._setup_agent()
@@ -62,25 +62,12 @@ class Trainer:
             self._resume_training()
     
     def _setup_environments(self):
-        if self.use_parallel:
-            from environments.parallel_env import make_parallel_env
-            self.parallel_env = make_parallel_env(
-                num_envs=self.num_envs, scenario=self.scenario, 
-                max_steps=self.max_steps, seed=self.seed, **self.env_kwargs
-            )
-            self.n_agents = self.parallel_env.n_agents
-            self.obs_dim = self.parallel_env.obs_dim
-            self.state_dim = self.parallel_env.state_dim
-            self.n_actions = self.parallel_env.n_actions
-            self.env = None
-        else:
-            self.parallel_env = None
-            self.env = make_env(scenario=self.scenario, max_steps=self.max_steps, 
-                               seed=self.seed, **self.env_kwargs)
-            self.n_agents = self.env.n_sensors
-            self.obs_dim = self.env.obs_dim
-            self.state_dim = self.env.state_dim
-            self.n_actions = self.env.n_actions
+        self.env = make_env(scenario=self.scenario, max_steps=self.max_steps, 
+                           seed=self.seed, **self.env_kwargs)
+        self.n_agents = self.env.n_sensors
+        self.obs_dim = self.env.obs_dim
+        self.state_dim = self.env.state_dim
+        self.n_actions = self.env.n_actions
         
         self.eval_env = make_env(scenario=self.scenario, max_steps=self.max_steps, 
                                  seed=self.seed + 1000, **self.env_kwargs)
@@ -148,25 +135,12 @@ class Trainer:
 
         try:
             while total_episodes < target_episodes:
-                # Collect episodes
-                if self.use_parallel:
-                    episodes_list, infos_list = collect_episodes_parallel(
-                        self.parallel_env, self.agent, self.max_steps
-                    )
-                    for ep, info in zip(episodes_list, infos_list):
-                        if not ep["rewards"]:
-                            continue
-                        self._process_episode(ep, info, total_episodes)
-                        total_episodes += 1
-                        pbar.update(1)
-                    # Log after each batch (every num_envs episodes)
-                    self._log_progress(total_episodes, current_loss)
-                else:
-                    episode, info = collect_episode(self.env, self.agent, self.max_steps)
-                    self._process_episode(episode, info, total_episodes)
-                    self._log_progress(total_episodes, current_loss)
-                    total_episodes += 1
-                    pbar.update(1)
+                # Collect episode
+                episode, info = collect_episode(self.env, self.agent, self.max_steps)
+                self._process_episode(episode, info, total_episodes)
+                self._log_progress(total_episodes, current_loss)
+                total_episodes += 1
+                pbar.update(1)
                 
                 # Update epsilon based on episode count
                 self.agent.set_episode_count(total_episodes)
@@ -229,10 +203,7 @@ class Trainer:
             return
         ramp_episodes = self.config.get("episodes", 10000) / 2.0
         curriculum_level = min(1.0, total_episodes / ramp_episodes)
-        if self.use_parallel:
-            self.parallel_env.set_curriculum_difficulty(curriculum_level)
-        else:
-            self.env.set_curriculum_difficulty(curriculum_level)
+        self.env.set_curriculum_difficulty(curriculum_level)
     
     # -------------------------------------------------------------------------
     # Episode Processing
@@ -412,5 +383,3 @@ class Trainer:
             self.env.close()
         if self.eval_env:
             self.eval_env.close()
-        if self.parallel_env:
-            self.parallel_env.close()
