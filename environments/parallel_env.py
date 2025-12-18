@@ -80,8 +80,10 @@ def worker(remote, parent_remote, env_fn_wrapper):
             elif cmd == "set_difficulty":
                 try:
                     env.set_curriculum_difficulty(data)
+                    remote.send(True)  # Acknowledge to prevent pipe blocking
                 except Exception as e:
                     print(f"Worker error setting difficulty: {e}")
+                    remote.send(False)
                 
             elif cmd == "close":
                 try:
@@ -264,6 +266,9 @@ class ParallelEnv:
         """Set curriculum difficulty for all environments."""
         for remote in self.remotes:
             remote.send(("set_difficulty", level))
+        # Consume acknowledgments to prevent pipe blocking
+        for remote in self.remotes:
+            _ = remote.recv()
     
     def close(self):
         """Close all environments."""
