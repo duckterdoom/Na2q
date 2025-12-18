@@ -157,14 +157,14 @@ class Trainer:
                         if not ep["rewards"]:
                             continue
                         self._process_episode(ep, info, total_episodes)
-                        if total_episodes % 64 == 0:
+                        if total_episodes % 1000 == 0:
                             self._log_progress(total_episodes, current_loss)
                         total_episodes += 1
                         pbar.update(1)
                 else:
                     episode, info = collect_episode(self.env, self.agent, self.max_steps)
                     self._process_episode(episode, info, total_episodes)
-                    if total_episodes % 64 == 0:
+                    if total_episodes % 1000 == 0:
                         self._log_progress(total_episodes, current_loss)
                     total_episodes += 1
                     pbar.update(1)
@@ -206,6 +206,7 @@ class Trainer:
             self._handle_interrupt()
         
         self._final_save(best_eval_reward)
+        self._print_training_report(total_episodes, best_eval_reward)
         self._cleanup()
         
         return {
@@ -338,6 +339,46 @@ class Trainer:
             coverage_rates=np.array(self.training_history["coverage_rates"]),
             losses=np.array(self.training_history["losses"])
         )
+    
+    def _print_training_report(self, total_episodes, best_eval_reward):
+        """Print detailed training report after completion."""
+        rewards = self.training_history["episode_rewards"]
+        coverages = self.training_history["coverage_rates"]
+        losses = [l for l in self.training_history["losses"] if l > 0]
+        
+        print("\n")
+        print("=" * 70)
+        print("                    NA²Q TRAINING REPORT")
+        print("=" * 70)
+        print(f"  Scenario:           {self.scenario}")
+        print(f"  Total Episodes:     {total_episodes:,}")
+        print(f"  Parallel Envs:      {self.num_envs}")
+        print("-" * 70)
+        print("  REWARD STATISTICS")
+        print(f"    Final (last 100): {np.mean(rewards[-100:]):.2f}")
+        print(f"    Best Episode:     {np.max(rewards):.2f}")
+        print(f"    Overall Mean:     {np.mean(rewards):.2f}")
+        print(f"    Std Deviation:    {np.std(rewards):.2f}")
+        print("-" * 70)
+        print("  COVERAGE STATISTICS")
+        print(f"    Final (last 100): {np.mean(coverages[-100:])*100:.1f}%")
+        print(f"    Best Episode:     {np.max(coverages)*100:.1f}%")
+        print(f"    Overall Mean:     {np.mean(coverages)*100:.1f}%")
+        print(f"    Std Deviation:    {np.std(coverages)*100:.1f}%")
+        print("-" * 70)
+        print("  TRAINING LOSS")
+        if len(losses) > 0:
+            print(f"    Final (last 100): {np.mean(losses[-100:]):.4f}")
+            print(f"    Minimum:          {np.min(losses):.4f}")
+        else:
+            print(f"    No training updates")
+        print("-" * 70)
+        print("  MODEL SAVED")
+        print(f"    Best Model:       {self.checkpoints_dir}/best_model.pt")
+        print(f"    Final Model:      {self.checkpoints_dir}/final_model.pt")
+        print(f"    History:          {self.history_dir}/training_history.npz")
+        print("=" * 70)
+        print("\n")
     
     # -------------------------------------------------------------------------
     # Cleanup

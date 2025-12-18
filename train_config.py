@@ -43,22 +43,22 @@ TRAINING_PRESETS: Dict[int, Dict] = {
     # -------------------------------------------------------------------------
     2: {
         "device": "cuda",
-        "num_envs": 1,         
+        "num_envs": 4,              # Increased for faster data collection
         "episodes": 20000,
-        "batch_size": 32,
-        "lr": 3.0e-4,
+        "batch_size": 64,           # Larger batch for stability
+        "lr": 1.0e-4,               # Lower LR for large network
         "gamma": 0.99,
         "epsilon_start": 1.0,
         "epsilon_end": 0.05,
-        "epsilon_decay": 5000,
+        "epsilon_decay": 4000,      # Adjusted for 20k episodes
         "target_update": 200,
         "eval_interval": 1000,
-        "eval_episodes": 20,
-        "save_interval": 5000,
-        "buffer_capacity": 500,
+        "eval_episodes": 10,
+        "save_interval": 2000,
+        "buffer_capacity": 2000,    # Larger buffer for more diversity
         "chunk_length": 100,
-        "updates_per_step": 4,
-        "learning_starts": 50,
+        "updates_per_step": 8,      # More learning per data
+        "learning_starts": 100,
         "no_amp": False,
     },
     

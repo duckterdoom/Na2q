@@ -67,20 +67,21 @@ def smooth_curve(values: List[float], window: int = 10) -> np.ndarray:
     return smoothed
 
 
-def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[str] = None, media_dir: Optional[str] = None):
+def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[str] = None, 
+                          media_dir: Optional[str] = None, scenario: int = 1):
     """
-    Generate training result plots.
+    Generate professional dark-themed training dashboard.
     
     Creates:
-    - training_dashboard.png: Combined overview
-    - coverage_ratio.png: Coverage over time
-    - training_losses.png: Loss curves
+    - train_dashboard.png: 4-panel dark theme dashboard (Reward, Coverage, Loss, Epsilon)
+    - train_coverage.png: Coverage over time
+    - train_losses.png: Loss curves
     """
-    history_dir = history_dir or os.path.join(exp_dir, "checkpoints")  # History in checkpoints
+    history_dir = history_dir or os.path.join(exp_dir, "checkpoints")
     media_dir = media_dir or os.path.join(exp_dir, "media")
     os.makedirs(media_dir, exist_ok=True)
     
-    # Prefer history_dir, fallback to legacy location
+    # Find history file
     history_path = os.path.join(history_dir, "training_history.npz")
     if not os.path.exists(history_path):
         history_path = os.path.join(exp_dir, "training_history.npz")
@@ -95,73 +96,121 @@ def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[
     coverages = data["coverage_rates"] if "coverage_rates" in data else []
     losses = data["losses"] if "losses" in data else []
     
+    if len(rewards) == 0:
+        print("Warning: Empty training history")
+        return
+    
     episodes = np.arange(1, len(rewards) + 1)
-    
-    # Color scheme
-    colors = {
-        'reward': '#2E86AB',
-        'coverage': '#28A745',
-        'loss': '#DC3545',
-        'smooth': '#FFC107'
-    }
-    
-    # 1. Training Dashboard
-    fig, axes = plt.subplots(2, 2, figsize=(14, 10))
-    fig.suptitle('NA²Q Training Dashboard - Directional Sensor Network', fontsize=14, fontweight='bold')
-    
-    # Reward plot
-    ax1 = axes[0, 0]
-    ax1.plot(episodes, rewards, alpha=0.3, color=colors['reward'], label='Raw')
-    ax1.plot(episodes, smooth_curve(list(rewards), window), color=colors['reward'], linewidth=2, label=f'Smoothed (w={window})')
-    ax1.set_xlabel('Episode')
-    ax1.set_ylabel('Episode Reward')
-    ax1.set_title('Training Reward')
-    ax1.legend()
-    ax1.grid(True, alpha=0.3)
-    
-    # Coverage plot
-    ax2 = axes[0, 1]
     coverage_pct = np.array(coverages) * 100
-    ax2.plot(episodes, coverage_pct, alpha=0.3, color=colors['coverage'], label='Raw')
-    ax2.plot(episodes, smooth_curve(list(coverage_pct), window), color=colors['coverage'], linewidth=2, label=f'Smoothed (w={window})')
-    ax2.set_xlabel('Episode')
-    ax2.set_ylabel('Coverage Rate (%)')
-    ax2.set_title('Target Coverage Rate')
-    ax2.legend()
-    ax2.grid(True, alpha=0.3)
-    ax2.set_ylim(0, 100)
     
-    # Loss plot
+    # =========================================================================
+    # Light Theme Dashboard
+    # =========================================================================
+    
+    # Light color palette
+    LIGHT_BG = '#ffffff'
+    PANEL_BG = '#f8f9fa'
+    GRID_COLOR = '#e0e0e0'
+    TEXT_COLOR = '#333333'
+    TITLE_COLOR = '#1a1a1a'
+    
+    # Chart colors
+    REWARD_COLOR = '#2563eb'      # Blue
+    COVERAGE_COLOR = '#16a34a'    # Green
+    LOSS_COLOR = '#dc2626'        # Red
+    
+    # Create figure with light background
+    fig, axes = plt.subplots(2, 2, figsize=(16, 10), facecolor=LIGHT_BG)
+    fig.patch.set_facecolor(LIGHT_BG)
+    
+    # Main title
+    fig.suptitle(f'NA²Q Training Dashboard - Scenario {scenario}', 
+                 fontsize=18, fontweight='bold', color=TITLE_COLOR, y=0.98)
+    
+    def style_axis(ax, title, xlabel, ylabel, color):
+        """Apply light theme styling to an axis."""
+        ax.set_facecolor(PANEL_BG)
+        ax.set_title(title, fontsize=14, fontweight='bold', color=TITLE_COLOR, pad=10)
+        ax.set_xlabel(xlabel, fontsize=12, color=TEXT_COLOR, labelpad=8)
+        ax.set_ylabel(ylabel, fontsize=12, color=TEXT_COLOR, labelpad=8)
+        ax.tick_params(axis='both', colors=TEXT_COLOR, labelsize=10, labelcolor=TEXT_COLOR)
+        ax.grid(True, alpha=0.5, color=GRID_COLOR, linestyle='-')
+        for spine in ax.spines.values():
+            spine.set_color(GRID_COLOR)
+            spine.set_linewidth(0.5)
+    
+    # -------------------------------------------------------------------------
+    # 1. Episode Reward (Top-Left)
+    # -------------------------------------------------------------------------
+    ax1 = axes[0, 0]
+    smoothed_rewards = smooth_curve(list(rewards), window)
+    ax1.fill_between(episodes, 0, smoothed_rewards, alpha=0.2, color=REWARD_COLOR)
+    ax1.plot(episodes, rewards, alpha=0.3, color=REWARD_COLOR, linewidth=0.5)
+    ax1.plot(episodes, smoothed_rewards, color=REWARD_COLOR, linewidth=2.5, label=f'Smoothed (w={window})')
+    ax1.axhline(y=np.mean(rewards[-100:]), color='#f59e0b', linestyle='--', linewidth=1.5, 
+                alpha=0.8, label=f'Final: {np.mean(rewards[-100:]):.1f}')
+    style_axis(ax1, 'Episode Reward', 'Episode', 'Reward', REWARD_COLOR)
+    ax1.legend(loc='lower right', facecolor=PANEL_BG, edgecolor=GRID_COLOR, 
+               labelcolor=TEXT_COLOR, fontsize=9)
+    
+    # -------------------------------------------------------------------------
+    # 2. Coverage Rate (Top-Right)
+    # -------------------------------------------------------------------------
+    ax2 = axes[0, 1]
+    smoothed_coverage = smooth_curve(list(coverage_pct), window)
+    ax2.fill_between(episodes, 0, smoothed_coverage, alpha=0.2, color=COVERAGE_COLOR)
+    ax2.plot(episodes, coverage_pct, alpha=0.3, color=COVERAGE_COLOR, linewidth=0.5)
+    ax2.plot(episodes, smoothed_coverage, color=COVERAGE_COLOR, linewidth=2.5, label=f'Smoothed (w={window})')
+    ax2.axhline(y=np.mean(coverage_pct[-100:]), color='#f59e0b', linestyle='--', linewidth=1.5,
+                alpha=0.8, label=f'Final: {np.mean(coverage_pct[-100:]):.1f}%')
+    style_axis(ax2, 'Coverage Rate', 'Episode', 'Coverage (%)', COVERAGE_COLOR)
+    ax2.set_ylim(0, 100)
+    ax2.legend(loc='lower right', facecolor=PANEL_BG, edgecolor=GRID_COLOR,
+               labelcolor=TEXT_COLOR, fontsize=9)
+    
+    # -------------------------------------------------------------------------
+    # 3. Training Loss (Bottom-Left)
+    # -------------------------------------------------------------------------
     ax3 = axes[1, 0]
     if len(losses) > 0:
-        # Losses might have different length than episodes due to updates_per_step
-        loss_x = np.linspace(episodes[0], episodes[-1], len(losses))
-        ax3.plot(loss_x, losses, alpha=0.3, color=colors['loss'], label='Raw')
+        # Filter out zero losses (before training started)
+        valid_losses = [l if l > 0 else np.nan for l in losses]
+        loss_x = np.linspace(1, len(rewards), len(valid_losses))
         
-        # Smooth loss
+        ax3.plot(loss_x, valid_losses, alpha=0.3, color=LOSS_COLOR, linewidth=0.5)
+        
         if len(losses) > window:
-            smooth_loss = np.convolve(losses, np.ones(window)/window, mode='valid')
-            smooth_x = np.linspace(episodes[0], episodes[-1], len(smooth_loss))
-            ax3.plot(smooth_x, smooth_loss, color=colors['loss'], label=f'Smoothed (w={window})')
-    ax3.set_xlabel('Episode')
-    ax3.set_ylabel('Loss')
-    ax3.set_title('Training Loss (TD + VAE)')
-    ax3.legend()
-    ax3.grid(True, alpha=0.3)
+            # Smooth only non-zero losses
+            clean_losses = [l for l in losses if l > 0]
+            if len(clean_losses) > window:
+                smooth_loss = np.convolve(clean_losses, np.ones(window)/window, mode='valid')
+                smooth_x = np.linspace(1, len(rewards), len(smooth_loss))
+                ax3.fill_between(smooth_x, 0, smooth_loss, alpha=0.2, color=LOSS_COLOR)
+                ax3.plot(smooth_x, smooth_loss, color=LOSS_COLOR, linewidth=2.5, label=f'Smoothed (w={window})')
+        
+        final_loss = np.mean([l for l in losses[-100:] if l > 0]) if len(losses) > 0 else 0
+        ax3.axhline(y=final_loss, color='#f59e0b', linestyle='--', linewidth=1.5,
+                    alpha=0.8, label=f'Final: {final_loss:.4f}')
+    style_axis(ax3, 'Training Loss', 'Episode', 'Loss', LOSS_COLOR)
+    ax3.legend(loc='upper right', facecolor=PANEL_BG, edgecolor=GRID_COLOR,
+               labelcolor=TEXT_COLOR, fontsize=9)
     
-    # Summary statistics
+    # -------------------------------------------------------------------------
+    # 4. Training Summary (Bottom-Right)
+    # -------------------------------------------------------------------------
     ax4 = axes[1, 1]
+    ax4.set_facecolor(PANEL_BG)
     ax4.axis('off')
     
     summary_text = f"""
     Training Summary
-    ────────────────────────────
-    Total Episodes: {len(rewards)}
+    ─────────────────────────────
+    Total Episodes: {len(rewards):,}
     
     Reward:
-      Final (avg last 100): {np.mean(rewards[-100:]):.3f}
-      Best Episode: {np.max(rewards):.3f}
-      Overall Mean: {np.mean(rewards):.3f}
+      Final (avg last 100): {np.mean(rewards[-100:]):.2f}
+      Best Episode: {np.max(rewards):.2f}
+      Overall Mean: {np.mean(rewards):.2f}
     
     Coverage:
       Final (avg last 100): {np.mean(coverages[-100:])*100:.1f}%
@@ -169,55 +218,74 @@ def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[
       Overall Mean: {np.mean(coverages)*100:.1f}%
     
     Loss:
-      Final (avg last 100): {np.mean(losses[-100:]):.4f}
+      Final (avg last 100): {np.mean([l for l in losses[-100:] if l > 0]):.4f}
     """
     
-    ax4.text(0.1, 0.5, summary_text, transform=ax4.transAxes, fontsize=11,
-             verticalalignment='center', fontfamily='monospace',
-             bbox=dict(boxstyle='round', facecolor='wheat', alpha=0.5))
+    ax4.text(0.1, 0.5, summary_text, transform=ax4.transAxes, fontsize=12,
+             verticalalignment='center', fontfamily='monospace', color=TEXT_COLOR,
+             bbox=dict(boxstyle='round,pad=0.5', facecolor='#f0f9ff', edgecolor=GRID_COLOR, alpha=0.8))
     
-    plt.tight_layout()
+    plt.tight_layout(rect=[0.02, 0.02, 0.98, 0.95])
     dashboard_path = os.path.join(media_dir, "train_dashboard.png")
-    plt.savefig(dashboard_path, dpi=150, bbox_inches='tight')
+    plt.savefig(dashboard_path, dpi=150, bbox_inches='tight', facecolor=LIGHT_BG, edgecolor='none')
     plt.close()
     print(f"Saved: {dashboard_path}")
     
-    # 2. Coverage Ratio Chart
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.fill_between(episodes, 0, coverage_pct, alpha=0.3, color=colors['coverage'])
-    ax.plot(episodes, coverage_pct, alpha=0.5, color=colors['coverage'])
-    ax.plot(episodes, smooth_curve(list(coverage_pct), window), color=colors['coverage'], linewidth=2)
-    ax.axhline(y=np.mean(coverage_pct), color='red', linestyle='--', label=f'Mean: {np.mean(coverage_pct):.1f}%')
-    ax.set_xlabel('Episode', fontsize=12)
-    ax.set_ylabel('Coverage Rate (%)', fontsize=12)
-    ax.set_title('Target Coverage Ratio Over Training', fontsize=14)
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+    # =========================================================================
+    # Coverage Ratio Chart (Separate)
+    # =========================================================================
+    fig, ax = plt.subplots(figsize=(12, 6), facecolor=LIGHT_BG)
+    ax.set_facecolor(PANEL_BG)
+    
+    ax.fill_between(episodes, 0, smoothed_coverage, alpha=0.3, color=COVERAGE_COLOR)
+    ax.plot(episodes, coverage_pct, alpha=0.4, color=COVERAGE_COLOR, linewidth=0.5)
+    ax.plot(episodes, smoothed_coverage, color=COVERAGE_COLOR, linewidth=2.5)
+    ax.axhline(y=np.mean(coverage_pct), color='#f59e0b', linestyle='--', linewidth=2, 
+               label=f'Mean: {np.mean(coverage_pct):.1f}%')
+    
+    ax.set_xlabel('Episode', fontsize=12, color=TEXT_COLOR)
+    ax.set_ylabel('Coverage Rate (%)', fontsize=12, color=TEXT_COLOR)
+    ax.set_title(f'NA²Q Target Coverage - Scenario {scenario}', fontsize=14, fontweight='bold', color=TITLE_COLOR)
+    ax.tick_params(colors=TEXT_COLOR)
+    ax.grid(True, alpha=0.3, color=GRID_COLOR)
     ax.set_ylim(0, 100)
+    ax.legend(facecolor=PANEL_BG, edgecolor=GRID_COLOR, labelcolor=TEXT_COLOR)
+    for spine in ax.spines.values():
+        spine.set_color(GRID_COLOR)
     
     coverage_path = os.path.join(media_dir, "train_coverage.png")
-    plt.savefig(coverage_path, dpi=150, bbox_inches='tight')
+    plt.savefig(coverage_path, dpi=150, bbox_inches='tight', facecolor=LIGHT_BG)
     plt.close()
     print(f"Saved: {coverage_path}")
     
-    # 3. Training Losses Chart
-    fig, ax = plt.subplots(figsize=(10, 6))
+    # =========================================================================
+    # Training Losses Chart (Separate)
+    # =========================================================================
+    fig, ax = plt.subplots(figsize=(12, 6), facecolor=LIGHT_BG)
+    ax.set_facecolor(PANEL_BG)
+    
     if len(losses) > 0:
-        loss_x = np.linspace(episodes[0], episodes[-1], len(losses))
-        ax.plot(loss_x, losses, alpha=0.3, color=colors['loss'])
+        clean_losses = [l for l in losses if l > 0]
+        loss_x = np.linspace(1, len(rewards), len(clean_losses))
+        ax.plot(loss_x, clean_losses, alpha=0.4, color=LOSS_COLOR, linewidth=0.5)
         
-        if len(losses) > window:
-            smooth_loss = np.convolve(losses, np.ones(window)/window, mode='valid')
-            smooth_x = np.linspace(episodes[0], episodes[-1], len(smooth_loss))
-            ax.plot(smooth_x, smooth_loss, color=colors['loss'], linewidth=2, label='Total Loss')
-    ax.set_xlabel('Episode', fontsize=12)
-    ax.set_ylabel('Loss', fontsize=12)
-    ax.set_title('Training Loss (TD Loss + VAE Loss)', fontsize=14)
-    ax.legend()
-    ax.grid(True, alpha=0.3)
+        if len(clean_losses) > window:
+            smooth_loss = np.convolve(clean_losses, np.ones(window)/window, mode='valid')
+            smooth_x = np.linspace(1, len(rewards), len(smooth_loss))
+            ax.fill_between(smooth_x, 0, smooth_loss, alpha=0.3, color=LOSS_COLOR)
+            ax.plot(smooth_x, smooth_loss, color=LOSS_COLOR, linewidth=2.5, label='Total Loss')
+    
+    ax.set_xlabel('Episode', fontsize=12, color=TEXT_COLOR)
+    ax.set_ylabel('Loss', fontsize=12, color=TEXT_COLOR)
+    ax.set_title(f'NA²Q Training Loss - Scenario {scenario}', fontsize=14, fontweight='bold', color=TITLE_COLOR)
+    ax.tick_params(colors=TEXT_COLOR)
+    ax.grid(True, alpha=0.3, color=GRID_COLOR)
+    ax.legend(facecolor=PANEL_BG, edgecolor=GRID_COLOR, labelcolor=TEXT_COLOR)
+    for spine in ax.spines.values():
+        spine.set_color(GRID_COLOR)
     
     loss_path = os.path.join(media_dir, "train_losses.png")
-    plt.savefig(loss_path, dpi=150, bbox_inches='tight')
+    plt.savefig(loss_path, dpi=150, bbox_inches='tight', facecolor=LIGHT_BG)
     plt.close()
     print(f"Saved: {loss_path}")
 

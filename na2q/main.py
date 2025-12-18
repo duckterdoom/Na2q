@@ -131,7 +131,7 @@ def run_train(args):
     # Generate visualizations
     print("\nGenerating training visualizations...")
     from visualize import plot_training_results
-    plot_training_results(result['exp_dir'])
+    plot_training_results(result['exp_dir'], scenario=args.scenario)
     
     return result
 
@@ -209,7 +209,7 @@ def run_visualize(args):
     os.makedirs(media_dir, exist_ok=True)
     
     if os.path.exists(os.path.join(history_dir, "training_history.npz")):
-        plot_training_results(exp_dir=training_result_dir, history_dir=history_dir, media_dir=media_dir)
+        plot_training_results(exp_dir=training_result_dir, history_dir=history_dir, media_dir=media_dir, scenario=args.scenario)
         print(f"Training charts saved to: {media_dir}")
     else:
         print(f"Error: No training history found at {history_dir}")
