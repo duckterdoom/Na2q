@@ -157,15 +157,14 @@ class Trainer:
                         if not ep["rewards"]:
                             continue
                         self._process_episode(ep, info, total_episodes)
-                        if total_episodes % 1000 == 0:
-                            self._log_progress(total_episodes, current_loss)
                         total_episodes += 1
                         pbar.update(1)
+                    # Log after each batch (every num_envs episodes)
+                    self._log_progress(total_episodes, current_loss)
                 else:
                     episode, info = collect_episode(self.env, self.agent, self.max_steps)
                     self._process_episode(episode, info, total_episodes)
-                    if total_episodes % 1000 == 0:
-                        self._log_progress(total_episodes, current_loss)
+                    self._log_progress(total_episodes, current_loss)
                     total_episodes += 1
                     pbar.update(1)
                 
