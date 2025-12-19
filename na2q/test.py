@@ -24,6 +24,7 @@ def parse_args():
     parser.add_argument("--scenario", type=int, default=1, choices=[1, 2])
     parser.add_argument("--episodes", type=int, default=10)
     parser.add_argument("--max-steps", type=int, default=100)
+    parser.add_argument("--hidden-dim", type=int, default=128, help="Hidden dimension (must match trained model)")
     parser.add_argument("--render", action="store_true")
     parser.add_argument("--device", type=str, default=None)
     parser.add_argument("--seed", type=int, default=42)
@@ -64,6 +65,9 @@ def test(args):
         obs_dim=env.obs_dim,
         state_dim=env.state_dim,
         n_actions=env.n_actions,
+        hidden_dim=args.hidden_dim,
+        rnn_hidden_dim=args.hidden_dim,
+        attention_hidden_dim=args.hidden_dim,
         device=device
     )
     
