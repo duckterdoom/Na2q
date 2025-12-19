@@ -44,21 +44,21 @@ TRAINING_PRESETS: Dict[int, Dict] = {
     2: {
         "device": "cuda",
         "num_envs": 1,               # Single environment (no parallel)
-        "episodes": 20000,
-        "batch_size": 128,           # Increased for better GPU utilization
-        "lr": 1.0e-4,               # Lower LR for large network
+        "episodes": 10000,           # Reduced for faster training
+        "batch_size": 256,           # Larger batch for faster GPU utilization
+        "lr": 3.0e-4,               # Higher LR for faster convergence
         "gamma": 0.99,
         "epsilon_start": 1.0,
         "epsilon_end": 0.05,
-        "epsilon_decay": 10000,     # Reach ε_end at 50% of training
+        "epsilon_decay": 7500,      # Reach ε_end at 75% of training
         "target_update": 200,
-        "eval_interval": 1000,
-        "eval_episodes": 10,
-        "save_interval": 2000,
-        "buffer_capacity": 50000,    # Experience diversity
+        "eval_interval": 2000,      # Less frequent evals
+        "eval_episodes": 5,         # Fewer eval episodes
+        "save_interval": 500,       # Save checkpoint every 500 episodes
+        "buffer_capacity": 20000,   # Smaller buffer, faster sampling
         "chunk_length": 25,
-        "updates_per_step": 1,      # Single update per episode
-        "learning_starts": 100,     # Wait for buffer to fill
+        "updates_per_step": 1,
+        "learning_starts": 50,      # Start learning earlier
         "no_amp": False,
     },
     
