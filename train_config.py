@@ -44,7 +44,7 @@ TRAINING_PRESETS: Dict[int, Dict] = {
     2: {
         "device": "cuda",
         "num_envs": 1,               # Single environment (no parallel)
-        "episodes": 10000,           # Reduced for faster training
+        "episodes": 10000,           # 10k episodes
         "batch_size": 256,           # Larger batch for faster GPU utilization
         "lr": 3.0e-4,               # Higher LR for faster convergence
         "gamma": 0.99,
