@@ -370,7 +370,7 @@ def generate_video(
     model_path: str,
     scenario: int = 1,
     output_path: str = "results/demo.gif",
-    duration: int = 15,
+    duration: int = 20,
     fps: int = 10,
     device: Optional[str] = None,
     seed: int = 42
@@ -378,7 +378,7 @@ def generate_video(
     """
     Generate video of trained agent.
     
-    Creates 15-second GIF showing:
+    Creates 20-second GIF showing:
     - Grid layout
     - Sensor positions and FoV
     - Target movements
@@ -399,12 +399,15 @@ def generate_video(
     # Create environment with rgb_array rendering
     env = make_env(scenario=scenario, render_mode="rgb_array", seed=seed)
     
-    # Create and load agent
+    # Create and load agent (use hidden_dim=128 to match trainer)
     agent = NA2QAgent(
         n_agents=env.n_sensors,
         obs_dim=env.obs_dim,
         state_dim=env.state_dim,
         n_actions=env.n_actions,
+        hidden_dim=128,
+        rnn_hidden_dim=128,
+        attention_hidden_dim=128,
         device=device
     )
     
@@ -428,6 +431,7 @@ def generate_video(
         obs_list, info = env.reset()
         observations = np.stack(obs_list)
         agent.init_hidden(1)
+        prev_actions = np.zeros(env.n_sensors, dtype=np.int64)
         
         done, truncated = False, False
         
@@ -440,9 +444,10 @@ def generate_video(
             
             # Take action
             avail_actions = np.stack(env.get_avail_actions())
-            actions = agent.select_actions(observations, avail_actions, evaluate=True)
+            actions = agent.select_actions(observations, prev_actions, avail_actions, evaluate=True)
             next_obs_list, reward, done, truncated, info = env.step(actions.tolist())
             observations = np.stack(next_obs_list)
+            prev_actions = actions
     
     env.close()
     
