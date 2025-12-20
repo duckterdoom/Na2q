@@ -103,9 +103,6 @@ def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[
     episodes = np.arange(1, len(rewards) + 1)
     coverage_pct = np.array(coverages) * 100
     
-    # Curriculum milestone: targets reach full speed at 50% of episodes
-    full_speed_episode = len(rewards) // 2
-    
     # =========================================================================
     # Light Theme Dashboard
     # =========================================================================
@@ -148,8 +145,6 @@ def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[
     ax1 = axes[0, 0]
     smoothed_rewards = smooth_curve(list(rewards), window)
     ax1.plot(episodes, smoothed_rewards, color=REWARD_COLOR, linewidth=2.5, label=f'Smoothed (w={window})')
-    ax1.axvline(x=full_speed_episode, color='#9333ea', linestyle=':', linewidth=1.5,
-                alpha=0.7, label='Full Speed')
     style_axis(ax1, 'Episode Reward', 'Episode', 'Reward', REWARD_COLOR)
     ax1.legend(loc='lower right', facecolor=PANEL_BG, edgecolor=GRID_COLOR, 
                labelcolor=TEXT_COLOR, fontsize=9)
@@ -160,8 +155,6 @@ def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[
     ax2 = axes[0, 1]
     smoothed_coverage = smooth_curve(list(coverage_pct), window)
     ax2.plot(episodes, smoothed_coverage, color=COVERAGE_COLOR, linewidth=2.5, label=f'Smoothed (w={window})')
-    ax2.axvline(x=full_speed_episode, color='#9333ea', linestyle=':', linewidth=1.5,
-                alpha=0.7, label='Full Speed')
     style_axis(ax2, 'Coverage Rate', 'Episode', 'Coverage (%)', COVERAGE_COLOR)
     ax2.set_ylim(0, 105)
     ax2.legend(loc='lower right', facecolor=PANEL_BG, edgecolor=GRID_COLOR,
@@ -198,7 +191,6 @@ def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[
     Training Summary
     ─────────────────────────────
     Total Episodes: {len(rewards):,}
-    Full Speed at:  Episode {full_speed_episode:,}
     
     Reward:
       Highest: {np.max(rewards):.2f}
@@ -237,10 +229,6 @@ def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[
     # Mean line
     ax.axhline(y=np.mean(coverage_pct), color='#f59e0b', linestyle='--', linewidth=2,
                alpha=0.8, label=f'Mean: {np.mean(coverage_pct):.1f}%')
-    
-    # Full speed milestone
-    ax.axvline(x=full_speed_episode, color='#9333ea', linestyle=':', linewidth=2,
-               alpha=0.7, label='Full Speed')
     
     ax.set_xlabel('Episode', fontsize=12, color=TEXT_COLOR)
     ax.set_ylabel('Coverage Rate (%)', fontsize=12, color=TEXT_COLOR)
