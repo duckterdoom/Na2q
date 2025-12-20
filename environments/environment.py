@@ -42,7 +42,7 @@ class DSNEnv(gym.Env):
         grid_size: Optional[int] = None,
         cell_size: float = 20.0,
         sensing_range: float = 18.0,
-        fov_angle: float = 60.0,
+        fov_angle: float = 90.0,  # Matches HiT-MAC: ±45° = 90° total
         rotation_step: float = 5.0,
         max_steps: int = 100,
         target_speed_range: Tuple[float, float] = (1.2, 2.4),  # Matches HiT-MAC: 2-4% of field/step
