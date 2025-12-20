@@ -128,6 +128,7 @@ class Trainer:
         pbar = tqdm(total=target_episodes, initial=self.start_episode, desc="Training", unit="ep")
         
         total_episodes = self.start_episode
+        session_episodes = 0  # Track episodes in THIS session (for curriculum reset)
         last_eval_episode = self.start_episode
         last_save_episode = self.start_episode
         best_eval_reward = -float('inf')
@@ -142,11 +143,12 @@ class Trainer:
                 total_episodes += 1
                 pbar.update(1)
                 
-                # Update epsilon based on episode count
-                self.agent.set_episode_count(total_episodes)
+                # Update epsilon based on session episode count (resets on resume)
+                self.agent.set_episode_count(session_episodes)
                 
-                # Curriculum
-                self._update_curriculum(total_episodes)
+                # Curriculum (based on session episodes, not total - restarts on resume)
+                session_episodes += 1
+                self._update_curriculum(session_episodes, n_episodes)
                 
                 # Progress bar
                 pbar.set_postfix({
@@ -198,11 +200,12 @@ class Trainer:
               f"Coverage: {self.tracker.get_mean('coverage'):.1%} | "
               f"Eps: {self.agent.epsilon:.3f} | Loss: {current_loss:.4f}")
     
-    def _update_curriculum(self, total_episodes):
-        if total_episodes % 100 != 0:
+    def _update_curriculum(self, session_episodes, total_session_episodes):
+        if session_episodes % 100 != 0:
             return
-        ramp_episodes = self.config.get("episodes", 10000) / 2.0
-        curriculum_level = min(1.0, total_episodes / ramp_episodes)
+        # Curriculum based on session progress, not total episodes
+        ramp_episodes = total_session_episodes / 2.0
+        curriculum_level = min(1.0, session_episodes / ramp_episodes)
         self.env.set_curriculum_difficulty(curriculum_level)
     
     # -------------------------------------------------------------------------
