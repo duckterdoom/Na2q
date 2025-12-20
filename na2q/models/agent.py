@@ -339,14 +339,14 @@ class NA2QAgent:
         }, path)
     
     def load(self, path: str):
-        """Load model checkpoint."""
+        """Load model checkpoint (epsilon NOT restored - will reset on resume)."""
         checkpoint = torch.load(path, map_location=self.device)
         self.model.load_state_dict(checkpoint["model_state_dict"])
         self.target_model.load_state_dict(checkpoint["target_model_state_dict"])
         self.q_optimizer.load_state_dict(checkpoint["q_optimizer_state_dict"])
         self.vae_optimizer.load_state_dict(checkpoint["vae_optimizer_state_dict"])
         self.train_step = checkpoint["train_step"]
-        self.epsilon = checkpoint["epsilon"]
+        # Note: epsilon NOT restored - will be recalculated from session_episodes
     
     # -------------------------------------------------------------------------
     # Interpretability
