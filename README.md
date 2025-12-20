@@ -5,8 +5,11 @@
 ```bash
 pip install -r requirements.txt
 
-# Train (GPU settings applied automatically)
+# Train Scenario 1
 python -m na2q.main --mode train --scenario 1
+
+# Train Scenario 2
+python -m na2q.main --mode train --scenario 2
 
 # Test
 python -m na2q.main --mode test --scenario 1
@@ -21,13 +24,6 @@ python -m na2q.main --mode train --scenario 1 --resume
 |----------|------|---------|---------|
 | 1 | 3×3 | 5 | 6 |
 | 2 | 10×10 | 50 | 60 |
-
-### Quick Verification (Sanity Check)
-To test if the fix for **Scenario 1** works without waiting hours, run the "Turbo Test" config (Scenario 99):
-```bash
-python -m na2q.main --mode train --scenario 99
-```
-*Runs for 15 minutes (2k episodes) to verify the "Infinite Range Reward" fix.*
 
 ### Run Scenario 2 (Swarm)
 To run the 50-sensor "Swarm" configuration:
@@ -48,6 +44,4 @@ After training, visualized the results:
 
 See `train_config.py` for default training settings.
 
-## Documentation
 
-- [Coverage Analysis](docs/coverage_analysis.md) — Mathematical proof of why 80% coverage is impossible.

@@ -52,17 +52,17 @@ from na2q.utils import get_device
 
 
 def smooth_curve(values: List[float], window: int = 10) -> np.ndarray:
-    """Smooth a curve using moving average."""
+    """Smooth a curve using moving average with expanding window at start."""
     if len(values) < window:
         return np.array(values)
     
-    weights = np.ones(window) / window
-    smoothed = np.convolve(values, weights, mode='valid')
+    values_arr = np.array(values)
+    smoothed = np.zeros(len(values))
     
-    # Pad beginning
-    pad_size = len(values) - len(smoothed)
-    if pad_size > 0:
-        smoothed = np.concatenate([values[:pad_size], smoothed])
+    # Use expanding window for the beginning (avoids spike)
+    for i in range(len(values)):
+        start_idx = max(0, i - window + 1)
+        smoothed[i] = np.mean(values_arr[start_idx:i+1])
     
     return smoothed
 
@@ -102,6 +102,9 @@ def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[
     
     episodes = np.arange(1, len(rewards) + 1)
     coverage_pct = np.array(coverages) * 100
+    
+    # Curriculum milestone: targets reach full speed at 50% of episodes
+    full_speed_episode = len(rewards) // 2
     
     # =========================================================================
     # Light Theme Dashboard
@@ -144,11 +147,9 @@ def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[
     # -------------------------------------------------------------------------
     ax1 = axes[0, 0]
     smoothed_rewards = smooth_curve(list(rewards), window)
-    ax1.fill_between(episodes, 0, smoothed_rewards, alpha=0.2, color=REWARD_COLOR)
-    ax1.plot(episodes, rewards, alpha=0.3, color=REWARD_COLOR, linewidth=0.5)
     ax1.plot(episodes, smoothed_rewards, color=REWARD_COLOR, linewidth=2.5, label=f'Smoothed (w={window})')
-    ax1.axhline(y=np.mean(rewards[-100:]), color='#f59e0b', linestyle='--', linewidth=1.5, 
-                alpha=0.8, label=f'Final: {np.mean(rewards[-100:]):.1f}')
+    ax1.axvline(x=full_speed_episode, color='#9333ea', linestyle=':', linewidth=1.5,
+                alpha=0.7, label='Full Speed')
     style_axis(ax1, 'Episode Reward', 'Episode', 'Reward', REWARD_COLOR)
     ax1.legend(loc='lower right', facecolor=PANEL_BG, edgecolor=GRID_COLOR, 
                labelcolor=TEXT_COLOR, fontsize=9)
@@ -158,13 +159,11 @@ def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[
     # -------------------------------------------------------------------------
     ax2 = axes[0, 1]
     smoothed_coverage = smooth_curve(list(coverage_pct), window)
-    ax2.fill_between(episodes, 0, smoothed_coverage, alpha=0.2, color=COVERAGE_COLOR)
-    ax2.plot(episodes, coverage_pct, alpha=0.3, color=COVERAGE_COLOR, linewidth=0.5)
     ax2.plot(episodes, smoothed_coverage, color=COVERAGE_COLOR, linewidth=2.5, label=f'Smoothed (w={window})')
-    ax2.axhline(y=np.mean(coverage_pct[-100:]), color='#f59e0b', linestyle='--', linewidth=1.5,
-                alpha=0.8, label=f'Final: {np.mean(coverage_pct[-100:]):.1f}%')
+    ax2.axvline(x=full_speed_episode, color='#9333ea', linestyle=':', linewidth=1.5,
+                alpha=0.7, label='Full Speed')
     style_axis(ax2, 'Coverage Rate', 'Episode', 'Coverage (%)', COVERAGE_COLOR)
-    ax2.set_ylim(0, 100)
+    ax2.set_ylim(0, 105)
     ax2.legend(loc='lower right', facecolor=PANEL_BG, edgecolor=GRID_COLOR,
                labelcolor=TEXT_COLOR, fontsize=9)
     
@@ -177,20 +176,13 @@ def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[
         valid_losses = [l if l > 0 else np.nan for l in losses]
         loss_x = np.linspace(1, len(rewards), len(valid_losses))
         
-        ax3.plot(loss_x, valid_losses, alpha=0.3, color=LOSS_COLOR, linewidth=0.5)
-        
         if len(losses) > window:
             # Smooth only non-zero losses
             clean_losses = [l for l in losses if l > 0]
             if len(clean_losses) > window:
-                smooth_loss = np.convolve(clean_losses, np.ones(window)/window, mode='valid')
+                smooth_loss = smooth_curve(clean_losses, window)
                 smooth_x = np.linspace(1, len(rewards), len(smooth_loss))
-                ax3.fill_between(smooth_x, 0, smooth_loss, alpha=0.2, color=LOSS_COLOR)
                 ax3.plot(smooth_x, smooth_loss, color=LOSS_COLOR, linewidth=2.5, label=f'Smoothed (w={window})')
-        
-        final_loss = np.mean([l for l in losses[-100:] if l > 0]) if len(losses) > 0 else 0
-        ax3.axhline(y=final_loss, color='#f59e0b', linestyle='--', linewidth=1.5,
-                    alpha=0.8, label=f'Final: {final_loss:.4f}')
     style_axis(ax3, 'Training Loss', 'Episode', 'Loss', LOSS_COLOR)
     ax3.legend(loc='upper right', facecolor=PANEL_BG, edgecolor=GRID_COLOR,
                labelcolor=TEXT_COLOR, fontsize=9)
@@ -206,19 +198,17 @@ def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[
     Training Summary
     ─────────────────────────────
     Total Episodes: {len(rewards):,}
+    Full Speed at:  Episode {full_speed_episode:,}
     
     Reward:
-      Final (avg last 100): {np.mean(rewards[-100:]):.2f}
-      Best Episode: {np.max(rewards):.2f}
-      Overall Mean: {np.mean(rewards):.2f}
+      Highest: {np.max(rewards):.2f}
+      Lowest:  {np.min(rewards):.2f}
+      Mean:    {np.mean(rewards):.2f}
     
     Coverage:
-      Final (avg last 100): {np.mean(coverages[-100:])*100:.1f}%
-      Best Episode: {np.max(coverages)*100:.1f}%
-      Overall Mean: {np.mean(coverages)*100:.1f}%
-    
-    Loss:
-      Final (avg last 100): {np.mean([l for l in losses[-100:] if l > 0]):.4f}
+      Highest: {np.max(coverages)*100:.1f}%
+      Lowest:  {np.min(coverages)*100:.1f}%
+      Mean:    {np.mean(coverages)*100:.1f}%
     """
     
     ax4.text(0.1, 0.5, summary_text, transform=ax4.transAxes, fontsize=12,
@@ -232,23 +222,32 @@ def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[
     print(f"Saved: {dashboard_path}")
     
     # =========================================================================
-    # Coverage Ratio Chart (Separate)
+    # Coverage Ratio Chart (Separate) - Clean visualization
     # =========================================================================
     fig, ax = plt.subplots(figsize=(12, 6), facecolor=LIGHT_BG)
     ax.set_facecolor(PANEL_BG)
     
-    ax.fill_between(episodes, 0, smoothed_coverage, alpha=0.3, color=COVERAGE_COLOR)
-    ax.plot(episodes, coverage_pct, alpha=0.4, color=COVERAGE_COLOR, linewidth=0.5)
-    ax.plot(episodes, smoothed_coverage, color=COVERAGE_COLOR, linewidth=2.5)
-    ax.axhline(y=np.mean(coverage_pct), color='#f59e0b', linestyle='--', linewidth=2, 
-               label=f'Mean: {np.mean(coverage_pct):.1f}%')
+    # Use larger smoothing window for cleaner chart
+    smooth_window = max(100, window * 2)
+    smoothed_coverage = smooth_curve(list(coverage_pct), smooth_window)
+    
+    # Plot smoothed line only (clean look)
+    ax.plot(episodes, smoothed_coverage, color=COVERAGE_COLOR, linewidth=2.5, label=f'Smoothed (w={smooth_window})')
+    
+    # Mean line
+    ax.axhline(y=np.mean(coverage_pct), color='#f59e0b', linestyle='--', linewidth=2,
+               alpha=0.8, label=f'Mean: {np.mean(coverage_pct):.1f}%')
+    
+    # Full speed milestone
+    ax.axvline(x=full_speed_episode, color='#9333ea', linestyle=':', linewidth=2,
+               alpha=0.7, label='Full Speed')
     
     ax.set_xlabel('Episode', fontsize=12, color=TEXT_COLOR)
     ax.set_ylabel('Coverage Rate (%)', fontsize=12, color=TEXT_COLOR)
     ax.set_title(f'NA²Q Target Coverage - Scenario {scenario}', fontsize=14, fontweight='bold', color=TITLE_COLOR)
     ax.tick_params(colors=TEXT_COLOR)
     ax.grid(True, alpha=0.3, color=GRID_COLOR)
-    ax.set_ylim(0, 100)
+    ax.set_ylim(0, 105)
     ax.legend(facecolor=PANEL_BG, edgecolor=GRID_COLOR, labelcolor=TEXT_COLOR)
     for spine in ax.spines.values():
         spine.set_color(GRID_COLOR)
@@ -272,8 +271,12 @@ def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[
         if len(clean_losses) > window:
             smooth_loss = np.convolve(clean_losses, np.ones(window)/window, mode='valid')
             smooth_x = np.linspace(1, len(rewards), len(smooth_loss))
-            ax.fill_between(smooth_x, 0, smooth_loss, alpha=0.3, color=LOSS_COLOR)
             ax.plot(smooth_x, smooth_loss, color=LOSS_COLOR, linewidth=2.5, label='Total Loss')
+        
+        # Mean line
+        mean_loss = np.mean(clean_losses)
+        ax.axhline(y=mean_loss, color='#f59e0b', linestyle='--', linewidth=2,
+                   alpha=0.8, label=f'Mean: {mean_loss:.4f}')
     
     ax.set_xlabel('Episode', fontsize=12, color=TEXT_COLOR)
     ax.set_ylabel('Loss', fontsize=12, color=TEXT_COLOR)
