@@ -45,7 +45,7 @@ class DSNEnv(gym.Env):
         fov_angle: float = 60.0,
         rotation_step: float = 5.0,
         max_steps: int = 100,
-        target_speed_range: Tuple[float, float] = (0.3, 0.7),
+        target_speed_range: Tuple[float, float] = (1.2, 2.4),  # Matches HiT-MAC: 2-4% of field/step
         render_mode: Optional[str] = None,
         seed: Optional[int] = None,
     ):
@@ -60,6 +60,7 @@ class DSNEnv(gym.Env):
         self.target_speed_range = target_speed_range
         self.render_mode = render_mode
         self.difficulty_level = 1.0
+        self.use_realistic_obs = False  # Curriculum: starts global, becomes realistic
         
         # Configure scenario
         if scenario == 1:
@@ -152,17 +153,24 @@ class DSNEnv(gym.Env):
     # -------------------------------------------------------------------------
     
     def set_curriculum_difficulty(self, level: float):
-        """Set curriculum difficulty (0.0 = slow targets, 1.0 = fast targets)."""
+        """Set curriculum difficulty.
+        
+        level 0.0-0.5: slow targets, global observations (easier)
+        level 0.5-1.0: fast targets, realistic observations (harder)
+        """
         self.difficulty_level = np.clip(level, 0.0, 1.0)
+        # Switch to realistic observations at 50% curriculum
+        self.use_realistic_obs = level >= 0.5
     
     def _initialize_targets(self) -> Tuple[np.ndarray, np.ndarray]:
         """Initialize randomly moving targets."""
         margin = self.cell_size * 0.1
         positions = self.np_random.uniform(margin, self.field_size - margin, (self.n_targets, 2))
         
-        # Scale speed by difficulty
-        min_speed = 0.1 + (self.target_speed_range[0] - 0.1) * self.difficulty_level
-        max_speed = 0.2 + (self.target_speed_range[1] - 0.2) * self.difficulty_level
+        # Scale speed by difficulty - reaches full HiT-MAC speed at 50% curriculum
+        speed_progress = min(1.0, self.difficulty_level * 2)  # 0.5 → 1.0, caps at 1.0
+        min_speed = 0.1 + (self.target_speed_range[0] - 0.1) * speed_progress
+        max_speed = 0.2 + (self.target_speed_range[1] - 0.2) * speed_progress
         
         speeds = self.np_random.uniform(min_speed, max_speed, self.n_targets)
         angles = self.np_random.uniform(0, 2 * np.pi, self.n_targets)
@@ -171,8 +179,12 @@ class DSNEnv(gym.Env):
         return positions, velocities
     
     def _update_targets(self):
-        """Update target positions with bouncing."""
-        self.target_positions += self.target_velocities
+        """Update target positions with bouncing and speed variation."""
+        # Apply 20% speed variation (matches DSN)
+        speed_variation = 1 + 0.2 * self.np_random.random(self.n_targets)
+        varied_velocities = self.target_velocities * speed_variation[:, np.newaxis]
+        
+        self.target_positions += varied_velocities
         
         for i in range(self.n_targets):
             for d in range(2):
@@ -183,7 +195,7 @@ class DSNEnv(gym.Env):
                     self.target_positions[i, d] = 2 * self.field_size - self.target_positions[i, d]
                     self.target_velocities[i, d] = -self.target_velocities[i, d]
         
-        # Random direction changes
+        # Random direction changes (10% chance per target)
         for i in range(self.n_targets):
             if self.np_random.random() < 0.1:
                 angle = self.np_random.uniform(0, 2 * np.pi)
@@ -320,7 +332,11 @@ class DSNEnv(gym.Env):
         return [self._get_agent_observation(i) for i in range(self.n_sensors)]
     
     def _get_agent_observation(self, sensor_idx: int) -> np.ndarray:
-        """Get observation for sensor i, sorted by distance."""
+        """Get observation for sensor i.
+        
+        If use_realistic_obs=True: only observe targets within sensing range AND FoV.
+        If use_realistic_obs=False: observe all targets (global view).
+        """
         sensor_pos = self.sensor_positions[sensor_idx]
         sensor_angle = self.sensor_angles[sensor_idx]
         
@@ -332,12 +348,29 @@ class DSNEnv(gym.Env):
             
             i_norm = sensor_idx / max(self.n_sensors - 1, 1)
             j_norm = j / max(self.n_targets - 1, 1)
-            rho_norm = rho / (self.field_size * np.sqrt(2))
-            alpha_norm = alpha / np.pi
             
-            target_obs_list.append((rho, [i_norm, j_norm, rho_norm, alpha_norm]))
+            if self.use_realistic_obs:
+                # Realistic: only observe within sensing range AND FoV
+                in_range = rho <= self.sensing_range
+                in_fov = abs(alpha) <= self.fov_angle / 2
+                is_visible = in_range and in_fov
+                
+                if is_visible:
+                    rho_norm = rho / (self.field_size * np.sqrt(2))
+                    alpha_norm = alpha / np.pi
+                else:
+                    rho_norm = 0.0
+                    alpha_norm = 0.0
+                sort_key = rho if is_visible else float('inf')
+            else:
+                # Global: observe all targets
+                rho_norm = rho / (self.field_size * np.sqrt(2))
+                alpha_norm = alpha / np.pi
+                sort_key = rho
+            
+            target_obs_list.append((sort_key, [i_norm, j_norm, rho_norm, alpha_norm]))
         
-        # Sort by distance
+        # Sort by distance (visible first)
         target_obs_list.sort(key=lambda x: x[0])
         
         obs = []
