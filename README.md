@@ -32,7 +32,17 @@ python -m na2q.main --mode train --scenario 2
 ```
 
 ### Run Visualization
-After training, visualized the results:
+After training, generate GIF demos of the trained agents:
+
+```bash
+# Generate Scenario 1 GIF (5 sensors, 6 targets)
+python -m na2q.main --mode video --scenario 1
+
+# Generate Scenario 2 GIF (50 sensors, 60 targets)
+python -m na2q.main --mode video --scenario 2
+```
+
+GIFs are saved to `Result/scenarioX/media/scenarioX_demo.gif` and show 1 test episode (100 steps) using the best trained model.
 
 ## Outputs
 
