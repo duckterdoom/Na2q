@@ -364,16 +364,27 @@ def generate_video(
     duration: int = 20,
     fps: int = 10,
     device: Optional[str] = None,
-    seed: int = 42
+    seed: int = 42,
+    single_episode: bool = True
 ):
     """
     Generate video of trained agent.
     
-    Creates 20-second GIF showing:
+    Creates GIF showing:
     - Grid layout
     - Sensor positions and FoV
     - Target movements
     - Tracking status
+    
+    Args:
+        model_path: Path to trained model checkpoint
+        scenario: Environment scenario (1 or 2)
+        output_path: Output path for GIF
+        duration: Video duration in seconds (ignored if single_episode=True)
+        fps: Frames per second for output GIF
+        device: Device to run on (cuda/cpu)
+        seed: Random seed
+        single_episode: If True, run exactly 1 episode (default). If False, run until duration.
     """
     try:
         import imageio
@@ -404,29 +415,36 @@ def generate_video(
     
     if os.path.exists(model_path):
         agent.load(model_path)
-        print(f"Loaded model from {model_path}")
+        print(f"Loaded model from {model_path} (best model)")
     else:
         print(f"Warning: Model not found at {model_path}, using random policy")
     
-    # Calculate frames needed
-    total_frames = duration * fps
-    steps_per_episode = env.max_steps
+    # Determine how many frames to capture
+    if single_episode:
+        max_frames = env.max_steps  # 1 episode = max_steps frames
+        print(f"Generating 1 test episode ({max_frames} steps) at {fps} FPS")
+    else:
+        max_frames = duration * fps
+        print(f"Generating {duration}s video at {fps} FPS ({max_frames} frames)")
     
-    print(f"Generating {duration}s video at {fps} FPS ({total_frames} frames)")
     print(f"Scenario {scenario}: {env.grid_size}×{env.grid_size} grid, {env.n_sensors} sensors, {env.n_targets} targets")
     
     frames = []
     frame_count = 0
+    episode_count = 0
+    total_reward = 0.0
     
-    while frame_count < total_frames:
+    while frame_count < max_frames:
         obs_list, info = env.reset()
         observations = np.stack(obs_list)
         agent.init_hidden(1)
         prev_actions = np.zeros(env.n_sensors, dtype=np.int64)
+        episode_count += 1
         
         done, truncated = False, False
+        episode_reward = 0.0
         
-        while not done and not truncated and frame_count < total_frames:
+        while not done and not truncated and frame_count < max_frames:
             # Render frame
             frame = env.render()
             if frame is not None:
@@ -439,6 +457,15 @@ def generate_video(
             next_obs_list, reward, done, truncated, info = env.step(actions.tolist())
             observations = np.stack(next_obs_list)
             prev_actions = actions
+            episode_reward += reward
+        
+        total_reward += episode_reward
+        
+        # Stop after 1 episode if single_episode mode
+        if single_episode:
+            coverage = info.get('coverage_rate', 0) * 100
+            print(f"Episode completed: Reward={episode_reward:.2f}, Final Coverage={coverage:.1f}%")
+            break
     
     env.close()
     
