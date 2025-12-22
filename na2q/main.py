@@ -161,6 +161,7 @@ def run_test(args):
             self.device = args.device
             self.seed = args.seed
             self.verbose = args.verbose
+            self.hidden_dim = 128  # Default hidden dimension
     
     return test(TestArgs(args))
 
