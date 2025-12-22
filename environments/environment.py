@@ -415,51 +415,124 @@ class DSNEnv(gym.Env):
             return
         
         if self.fig is None:
-            self.fig, self.ax = plt.subplots(1, 1, figsize=(10, 10))
+            # Professional light theme setup
+            plt.style.use('default')
+            self.fig, self.ax = plt.subplots(1, 1, figsize=(12, 12), facecolor='#ffffff')
+            self.ax.set_facecolor('#f8f9fa')
         
         self.ax.clear()
-        self.ax.set_xlim(-2, self.field_size + 2)
-        self.ax.set_ylim(-2, self.field_size + 2)
+        self.ax.set_xlim(-3, self.field_size + 3)
+        self.ax.set_ylim(-3, self.field_size + 3)
         self.ax.set_aspect('equal')
+        self.ax.set_facecolor('#f8f9fa')
         
         targets_tracked = np.any(self.goal_map, axis=0) if self.goal_map is not None else np.zeros(self.n_targets)
-        n_tracked = np.sum(targets_tracked)
+        n_tracked = int(np.sum(targets_tracked))
+        coverage_pct = 100 * n_tracked / self.n_targets
         
+        # Professional title with coverage info
         self.ax.set_title(
-            f'Step: {self.current_step} | Tracked: {n_tracked}/{self.n_targets} ({100*n_tracked/self.n_targets:.1f}%)\n'
-            f'Scenario {self.scenario}: {self.grid_size}×{self.grid_size} grid'
+            f'NA²Q Sensor Network Simulation\n'
+            f'Step {self.current_step:03d} | Coverage: {coverage_pct:.0f}%',
+            fontsize=16, fontweight='bold', color='#1a1a1a', pad=15
         )
         
-        # Draw grid
+        # Draw grid with subtle lines
         for i in range(self.grid_size + 1):
-            self.ax.axhline(y=i * self.cell_size, color='lightgray', linewidth=0.5)
-            self.ax.axvline(x=i * self.cell_size, color='lightgray', linewidth=0.5)
+            alpha = 0.4 if i % 2 == 0 else 0.2
+            self.ax.axhline(y=i * self.cell_size, color='#cbd5e1', linewidth=0.8, alpha=alpha)
+            self.ax.axvline(x=i * self.cell_size, color='#cbd5e1', linewidth=0.8, alpha=alpha)
         
-        self.ax.add_patch(plt.Rectangle((0, 0), self.field_size, self.field_size, fill=False, edgecolor='black', linewidth=2))
+        # Field boundary
+        self.ax.add_patch(plt.Rectangle((0, 0), self.field_size, self.field_size, 
+                                         fill=False, edgecolor='#3b82f6', linewidth=2.5, alpha=0.9))
+        self.ax.add_patch(plt.Rectangle((-0.3, -0.3), self.field_size + 0.6, self.field_size + 0.6, 
+                                         fill=False, edgecolor='#93c5fd', linewidth=1, alpha=0.5))
         
-        # Draw sensors
-        colors = plt.cm.Set1(np.linspace(0, 1, min(self.n_sensors, 10)))
+        # Professional color palette for sensors (vibrant but clean)
+        sensor_colors = [
+            '#ef4444', '#3b82f6', '#10b981', '#f59e0b', '#8b5cf6',
+            '#ec4899', '#06b6d4', '#84cc16', '#f97316', '#6366f1'
+        ]
+        
+        # Draw sensors with enhanced styling
         for i in range(self.n_sensors):
             pos = self.sensor_positions[i]
             angle = np.degrees(self.sensor_angles[i])
-            color = colors[i % len(colors)]
+            color = sensor_colors[i % len(sensor_colors)]
             
-            wedge = Wedge(pos, self.sensing_range, angle - np.degrees(self.fov_angle) / 2,
-                         angle + np.degrees(self.fov_angle) / 2, alpha=0.2, color=color)
-            self.ax.add_patch(wedge)
-            self.ax.plot(pos[0], pos[1], 'o', color=color, markersize=8, markeredgecolor='black')
+            # FoV wedge with gradient-like effect
+            wedge_outer = Wedge(pos, self.sensing_range, angle - np.degrees(self.fov_angle) / 2,
+                               angle + np.degrees(self.fov_angle) / 2, alpha=0.2, color=color)
+            wedge_inner = Wedge(pos, self.sensing_range * 0.7, angle - np.degrees(self.fov_angle) / 2,
+                               angle + np.degrees(self.fov_angle) / 2, alpha=0.15, color=color)
+            self.ax.add_patch(wedge_outer)
+            self.ax.add_patch(wedge_inner)
+            
+            # FoV edge lines
+            fov_half = np.degrees(self.fov_angle) / 2
+            for edge_angle in [angle - fov_half, angle + fov_half]:
+                rad = np.radians(edge_angle)
+                end_x = pos[0] + self.sensing_range * np.cos(rad)
+                end_y = pos[1] + self.sensing_range * np.sin(rad)
+                self.ax.plot([pos[0], end_x], [pos[1], end_y], color=color, alpha=0.5, linewidth=1)
+            
+            # Sensor marker with shadow effect
+            self.ax.plot(pos[0], pos[1], 'o', color=color, markersize=14, 
+                        markeredgecolor='white', markeredgewidth=2.5, zorder=10)
+            self.ax.plot(pos[0] + 0.3, pos[1] - 0.3, 'o', color='#00000020', markersize=14, zorder=9)
         
-        # Draw targets
+        # Draw targets with enhanced styling
         for j in range(self.n_targets):
             pos = self.target_positions[j]
             tracked = targets_tracked[j] if len(targets_tracked) > j else False
-            color = 'green' if tracked else 'red'
-            marker = '*' if tracked else 'x'
-            self.ax.plot(pos[0], pos[1], marker, color=color, markersize=12, markeredgewidth=2)
+            
+            if tracked:
+                # Tracked: green with glow
+                self.ax.plot(pos[0], pos[1], '*', color='#22c55e', markersize=20, 
+                            markeredgecolor='#166534', markeredgewidth=1.5, zorder=11)
+                self.ax.plot(pos[0], pos[1], 'o', color='#22c55e', markersize=28, alpha=0.15, zorder=8)
+            else:
+                # Untracked: red with warning style
+                self.ax.plot(pos[0], pos[1], 'X', color='#ef4444', markersize=16, 
+                            markeredgecolor='#991b1b', markeredgewidth=1.5, zorder=11)
+                self.ax.plot(pos[0], pos[1], 'o', color='#ef4444', markersize=22, alpha=0.12, zorder=8)
         
-        tracked_patch = mpatches.Patch(color='green', label=f'Tracked ({n_tracked})')
-        untracked_patch = mpatches.Patch(color='red', label=f'Untracked ({self.n_targets - n_tracked})')
-        self.ax.legend(handles=[tracked_patch, untracked_patch], loc='upper right')
+        # Coverage meter (bottom bar)
+        meter_y = -2
+        meter_width = self.field_size * 0.8
+        meter_x = (self.field_size - meter_width) / 2
+        
+        # Background bar
+        self.ax.add_patch(plt.Rectangle((meter_x, meter_y - 0.3), meter_width, 0.6, 
+                                         color='#e2e8f0', alpha=0.9, zorder=12))
+        # Progress bar
+        progress_width = meter_width * (coverage_pct / 100)
+        bar_color = '#22c55e' if coverage_pct >= 70 else '#f59e0b' if coverage_pct >= 40 else '#ef4444'
+        self.ax.add_patch(plt.Rectangle((meter_x, meter_y - 0.25), progress_width, 0.5, 
+                                         color=bar_color, alpha=0.9, zorder=13))
+        
+        # Legend with modern styling
+        from matplotlib.lines import Line2D
+        legend_elements = [
+            Line2D([0], [0], marker='*', color='w', markerfacecolor='#22c55e', 
+                   markersize=14, markeredgecolor='#166534', label=f'Tracked ({n_tracked})', linestyle='None'),
+            Line2D([0], [0], marker='X', color='w', markerfacecolor='#ef4444', 
+                   markersize=12, markeredgecolor='#991b1b', label=f'Untracked ({self.n_targets - n_tracked})', linestyle='None'),
+        ]
+        legend = self.ax.legend(handles=legend_elements, loc='upper right', 
+                               facecolor='#ffffff', edgecolor='#e2e8f0', 
+                               labelcolor='#1a1a1a', fontsize=12, framealpha=0.95)
+        legend.get_frame().set_linewidth(1.5)
+        
+        # Remove axis ticks for cleaner look
+        self.ax.set_xticks([])
+        self.ax.set_yticks([])
+        
+        # Subtle border around plot
+        for spine in self.ax.spines.values():
+            spine.set_color('#e2e8f0')
+            spine.set_linewidth(1.5)
         
         plt.tight_layout()
         
