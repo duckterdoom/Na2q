@@ -482,21 +482,21 @@ class DSNEnv(gym.Env):
                         markeredgecolor='white', markeredgewidth=2.5, zorder=10)
             self.ax.plot(pos[0] + 0.3, pos[1] - 0.3, 'o', color='#00000020', markersize=14, zorder=9)
         
-        # Draw targets with enhanced styling
+        # Draw targets with circle markers
         for j in range(self.n_targets):
             pos = self.target_positions[j]
             tracked = targets_tracked[j] if len(targets_tracked) > j else False
             
             if tracked:
-                # Tracked: green with glow
-                self.ax.plot(pos[0], pos[1], '*', color='#22c55e', markersize=20, 
-                            markeredgecolor='#166534', markeredgewidth=1.5, zorder=11)
-                self.ax.plot(pos[0], pos[1], 'o', color='#22c55e', markersize=28, alpha=0.15, zorder=8)
+                # Tracked: solid green circle
+                self.ax.plot(pos[0], pos[1], 'o', color='#22c55e', markersize=16, 
+                            markeredgecolor='#166534', markeredgewidth=2, zorder=11)
+                self.ax.plot(pos[0], pos[1], 'o', color='#22c55e', markersize=24, alpha=0.2, zorder=8)
             else:
-                # Untracked: red with warning style
-                self.ax.plot(pos[0], pos[1], 'X', color='#ef4444', markersize=16, 
-                            markeredgecolor='#991b1b', markeredgewidth=1.5, zorder=11)
-                self.ax.plot(pos[0], pos[1], 'o', color='#ef4444', markersize=22, alpha=0.12, zorder=8)
+                # Untracked: red circle with outline
+                self.ax.plot(pos[0], pos[1], 'o', color='#ef4444', markersize=16, 
+                            markeredgecolor='#991b1b', markeredgewidth=2, zorder=11)
+                self.ax.plot(pos[0], pos[1], 'o', color='#ef4444', markersize=24, alpha=0.15, zorder=8)
         
         # Coverage meter (bottom bar)
         meter_y = -2
@@ -515,10 +515,10 @@ class DSNEnv(gym.Env):
         # Legend with modern styling
         from matplotlib.lines import Line2D
         legend_elements = [
-            Line2D([0], [0], marker='*', color='w', markerfacecolor='#22c55e', 
-                   markersize=14, markeredgecolor='#166534', label=f'Tracked ({n_tracked})', linestyle='None'),
-            Line2D([0], [0], marker='X', color='w', markerfacecolor='#ef4444', 
-                   markersize=12, markeredgecolor='#991b1b', label=f'Untracked ({self.n_targets - n_tracked})', linestyle='None'),
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#22c55e', 
+                   markersize=12, markeredgecolor='#166534', markeredgewidth=1.5, label=f'Tracked ({n_tracked})', linestyle='None'),
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='#ef4444', 
+                   markersize=12, markeredgecolor='#991b1b', markeredgewidth=1.5, label=f'Untracked ({self.n_targets - n_tracked})', linestyle='None'),
         ]
         legend = self.ax.legend(handles=legend_elements, loc='upper right', 
                                facecolor='#ffffff', edgecolor='#e2e8f0', 
