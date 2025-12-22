@@ -155,8 +155,9 @@ class DSNEnv(gym.Env):
     def set_curriculum_difficulty(self, level: float):
         """Set curriculum difficulty.
         
-        0-49%: Old speed + global observations (easy)
-        50-100%: HiT-MAC speed + realistic observations (hard)
+        Controls observation type:
+        0-49%: global observations (easy)
+        50-100%: realistic observations (hard)
         """
         self.difficulty_level = np.clip(level, 0.0, 1.0)
         # Switch to realistic observations at 50% curriculum
@@ -167,13 +168,8 @@ class DSNEnv(gym.Env):
         margin = self.cell_size * 0.1
         positions = self.np_random.uniform(margin, self.field_size - margin, (self.n_targets, 2))
         
-        # Scale speed: old speed (0.3-0.7) → HiT-MAC (1.2-2.4) at 50% curriculum
-        speed_progress = min(1.0, self.difficulty_level * 2)  # 0.5 → 1.0, caps at 1.0
-        # Old speed: (0.3, 0.7), HiT-MAC: (1.2, 2.4)
-        min_speed = 0.3 + (self.target_speed_range[0] - 0.3) * speed_progress
-        max_speed = 0.7 + (self.target_speed_range[1] - 0.7) * speed_progress
-        
-        speeds = self.np_random.uniform(min_speed, max_speed, self.n_targets)
+        # Use fixed speed range (0.3-0.7)
+        speeds = self.np_random.uniform(self.target_speed_range[0], self.target_speed_range[1], self.n_targets)
         angles = self.np_random.uniform(0, 2 * np.pi, self.n_targets)
         velocities = np.stack([speeds * np.cos(angles), speeds * np.sin(angles)], axis=1)
         
