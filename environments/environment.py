@@ -522,9 +522,13 @@ class DSNEnv(gym.Env):
                                labelcolor='#1a1a1a', fontsize=12, framealpha=0.95)
         legend.get_frame().set_linewidth(1.5)
         
-        # Remove axis ticks for cleaner look
-        self.ax.set_xticks([])
-        self.ax.set_yticks([])
+        # Add axis ticks and labels
+        ticks = np.arange(0, self.field_size + 0.1, self.cell_size)
+        self.ax.set_xticks(ticks)
+        self.ax.set_yticks(ticks)
+        self.ax.set_xlabel('X Coordinate (m)', fontsize=16, color='#1a1a1a', fontweight='bold')
+        self.ax.set_ylabel('Y Coordinate (m)', fontsize=16, color='#1a1a1a', fontweight='bold')
+        self.ax.tick_params(colors='#64748b', labelsize=16)
         
         # Subtle border around plot
         for spine in self.ax.spines.values():
