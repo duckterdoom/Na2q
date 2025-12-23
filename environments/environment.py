@@ -433,11 +433,12 @@ class DSNEnv(gym.Env):
             fontsize=16, fontweight='bold', color='#1a1a1a', pad=15
         )
         
-        # Draw grid with subtle lines
+        # Draw grid with MORE VISIBLE lines
         for i in range(self.grid_size + 1):
-            alpha = 0.4 if i % 2 == 0 else 0.2
-            self.ax.axhline(y=i * self.cell_size, color='#cbd5e1', linewidth=0.8, alpha=alpha)
-            self.ax.axvline(x=i * self.cell_size, color='#cbd5e1', linewidth=0.8, alpha=alpha)
+            alpha = 0.8 if i % 2 == 0 else 0.5  # Increased opacity
+            linewidth = 1.5 if i % 2 == 0 else 1.0 # Thicker lines
+            self.ax.axhline(y=i * self.cell_size, color='#94a3b8', linewidth=linewidth, alpha=alpha) # Darker gray
+            self.ax.axvline(x=i * self.cell_size, color='#94a3b8', linewidth=linewidth, alpha=alpha)
         
         # Field boundary
         self.ax.add_patch(plt.Rectangle((0, 0), self.field_size, self.field_size, 
