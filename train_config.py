@@ -61,28 +61,6 @@ TRAINING_PRESETS: Dict[int, Dict] = {
         "learning_starts": 50,      # Start learning earlier
         "no_amp": False,
     },
-    
-    # -------------------------------------------------------------------------
-    # Default fallback
-    # -------------------------------------------------------------------------
-    0: {
-        "device": "cuda",
-        "num_envs": 24,
-        "episodes": 30000,
-        "batch_size": 128,
-        "lr": 5e-4,
-        "gamma": 0.99,
-        "epsilon_start": 1.0,
-        "epsilon_end": 0.05,
-        "epsilon_decay": 10000,
-        "target_update": 200,
-        "eval_interval": 50,
-        "save_interval": 200,
-        "buffer_capacity": 100000,
-        "updates_per_step": 1,
-        "chunk_length": 25,
-        "no_amp": False,
-    },
 }
 
 # Backward compatibility alias
@@ -95,7 +73,7 @@ DEFAULT_STRONG_GPU_PRESETS = TRAINING_PRESETS
 
 def get_strong_gpu_settings(scenario: int = 1) -> Dict:
     """Get training settings for a scenario."""
-    preset = TRAINING_PRESETS.get(scenario, TRAINING_PRESETS[0])
+    preset = TRAINING_PRESETS.get(scenario, TRAINING_PRESETS[1])
     return deepcopy(preset)
 
 

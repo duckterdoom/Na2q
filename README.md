@@ -46,12 +46,31 @@ GIFs are saved to `Result/scenarioX/media/scenarioX_demo.gif` and show 1 test ep
 
 ## Outputs
 
-- `Result/scenarioX/checkpoints/` — final models
-- `Result/scenarioX/history/` — training logs
-- `Result/scenarioX/media/` — charts and videos
+- `Scenario X Result/checkpoints/` — final models
+- `Scenario X Result/` — charts and videos
 
 ## Config
 
 See `train_config.py` for default training settings.
 
 
+
+## File Structure
+ 
+```
+.
+├── Scenario 1 Result/      # Scenario 1 Training artifacts
+├── Scenario 2 Result/      # Scenario 2 Training artifacts
+├── environments/           # Gym environment definitions
+│   └── environment.py      # Core DSN environment logic
+├── na2q/                   # Main package
+│   ├── engine/             # Training engine (trainer, collector)
+│   ├── models/             # Neural network architectures
+│   ├── utils/              # Utility functions
+│   ├── main.py             # Entry point for training/testing
+│   └── test.py             # Evaluation script
+├── requirements.txt        # Python dependencies
+├── train_config.py         # Hyperparameters and configuration
+├── visualize.py            # Visualization tools (plots, GIFs)
+└── README.md               # Project documentation
+```

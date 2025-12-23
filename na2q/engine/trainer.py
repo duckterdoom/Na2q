@@ -36,7 +36,7 @@ class Trainer:
         self.exp_dir = setup_experiment(config.get("log_dir", "Result"), config.get("exp_name"))
         self.checkpoints_dir = os.path.join(self.exp_dir, "checkpoints")
         self.history_dir = self.checkpoints_dir
-        self.media_dir = os.path.join(self.exp_dir, "media")
+        self.media_dir = self.exp_dir
         
         # Logger
         self.logger = Logger(self.exp_dir, experiment_name="", use_tensorboard=False)

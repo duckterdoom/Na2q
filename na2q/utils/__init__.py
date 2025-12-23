@@ -1,4 +1,4 @@
-from .replay_buffer import EpisodeReplayBuffer, SimpleReplayBuffer
+from .replay_buffer import EpisodeReplayBuffer
 from .logger import Logger, MetricsTracker
 
 # Device selection utility
@@ -52,11 +52,8 @@ def setup_experiment(base_dir: str = "results", exp_name: str = None):
     exp_dir = os.path.join(base_dir, exp_name)
     os.makedirs(exp_dir, exist_ok=True)
     os.makedirs(os.path.join(exp_dir, "checkpoints"), exist_ok=True)
-    os.makedirs(os.path.join(exp_dir, "history"), exist_ok=True)
-    os.makedirs(os.path.join(exp_dir, "media"), exist_ok=True)
-    os.makedirs(os.path.join(exp_dir, "videos"), exist_ok=True)
     
     return exp_dir
 
 
-__all__ = ["EpisodeReplayBuffer", "SimpleReplayBuffer", "Logger", "MetricsTracker", "get_device", "setup_experiment"]
+__all__ = ["EpisodeReplayBuffer", "Logger", "MetricsTracker", "get_device", "setup_experiment"]

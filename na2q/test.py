@@ -2,7 +2,7 @@
 NA²Q Evaluation Script - Test trained models.
 
 Usage:
-    python -m na2q.test --model Result/scenario1/best_model.pt --scenario 1
+    python -m na2q.test --model "Scenario 1 Result/checkpoints/best_model.pt" --scenario 1
 """
 
 import argparse
@@ -20,7 +20,7 @@ from na2q.utils import get_device
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Test NA²Q on DSN")
-    parser.add_argument("--model", type=str, default="trainedModel/best_model.pt")
+    parser.add_argument("--model", type=str, default="Scenario 1 Result/checkpoints/best_model.pt")
     parser.add_argument("--scenario", type=int, default=1, choices=[1, 2])
     parser.add_argument("--episodes", type=int, default=10)
     parser.add_argument("--max-steps", type=int, default=100)
@@ -57,6 +57,10 @@ def test(args):
     print(f"  Sensors: {env.n_sensors}, Targets: {env.n_targets}")
     print(f"Model: {args.model}")
     print(f"Device: {device}")
+    
+    # Enforce realistic observations
+    env.set_curriculum_difficulty(1.0)
+    print("Observation Mode: REALISTIC (Limited FoV)")
     print("=" * 60)
     
     # Create and load agent
@@ -127,7 +131,7 @@ def test(args):
     }
     
     script_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    result_dir = os.path.join(script_dir, "Result", f"scenario{args.scenario}")
+    result_dir = os.path.join(script_dir, f"Scenario {args.scenario} Result")
     os.makedirs(result_dir, exist_ok=True)
     
     history_path = os.path.join(result_dir, "test_history.npz")
@@ -137,7 +141,7 @@ def test(args):
     # Generate chart
     try:
         from visualize import plot_test_results
-        media_dir = os.path.join(result_dir, "media")
+        media_dir = result_dir
         os.makedirs(media_dir, exist_ok=True)
         chart_path = os.path.join(media_dir, "test_results.png")
         plot_test_results(results, chart_path, args.scenario)
@@ -165,6 +169,7 @@ def run_quick_test():
     env1 = make_env(scenario=1)
     print(f"  Grid: {env1.grid_size}×{env1.grid_size}")
     print(f"  Sensors: {env1.n_sensors}, Targets: {env1.n_targets}")
+    env1.set_curriculum_difficulty(1.0) # Realistic obs
     
     obs, _ = env1.reset()
     actions = [env1.action_space.sample() for _ in range(env1.n_sensors)]
@@ -177,6 +182,7 @@ def run_quick_test():
     env2 = make_env(scenario=2)
     print(f"  Grid: {env2.grid_size}×{env2.grid_size}")
     print(f"  Sensors: {env2.n_sensors}, Targets: {env2.n_targets}")
+    env2.set_curriculum_difficulty(1.0) # Realistic obs
     
     obs, _ = env2.reset()
     actions = [env2.action_space.sample() for _ in range(env2.n_sensors)]

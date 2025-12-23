@@ -15,7 +15,7 @@ from typing import Optional, List
 import json
 
 
-def analyze_trend(history_path: str = 'Result/scenario1/history/training_history.npz', chunk_size: int = 1000):
+def analyze_trend(history_path: str = 'Scenario 1 Result/checkpoints/training_history.npz', chunk_size: int = 1000):
     """Analyze training trends by chunking episodes."""
     if not os.path.exists(history_path):
         print(f"File not found: {history_path}")
@@ -78,7 +78,7 @@ def plot_training_results(exp_dir: str, window: int = 50, history_dir: Optional[
     - train_losses.png: Loss curves
     """
     history_dir = history_dir or os.path.join(exp_dir, "checkpoints")
-    media_dir = media_dir or os.path.join(exp_dir, "media")
+    media_dir = media_dir or exp_dir # Save directly in result folder
     os.makedirs(media_dir, exist_ok=True)
     
     # Find history file
@@ -302,7 +302,7 @@ def plot_test_results(results: dict, output_path: str, scenario: int = 1):
     training_episodes = "N/A"
     try:
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        history_path = os.path.join(script_dir, "Result", f"scenario{scenario}", "history", "training_history.npz")
+        history_path = os.path.join(script_dir, f"Scenario {scenario} Result", "checkpoints", "training_history.npz")
         if os.path.exists(history_path):
             data = np.load(history_path)
             training_episodes = len(data.get("episode_rewards", []))
@@ -400,6 +400,10 @@ def generate_video(
     
     # Create environment with rgb_array rendering
     env = make_env(scenario=scenario, render_mode="rgb_array", seed=seed)
+    # Enforce realistic observations
+    env.set_curriculum_difficulty(1.0)
+    print("Video Generation: Realistic Observations Enabled (Limited FoV)")
+
     
     # Create and load agent (use hidden_dim=128 to match trainer)
     agent = NA2QAgent(

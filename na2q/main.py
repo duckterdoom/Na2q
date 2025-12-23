@@ -101,11 +101,10 @@ def run_train(args):
     
     exp_name = args.exp_name or f"scenario{args.scenario}"
     
-    config = vars(args)
     config.update({
         "n_episodes": args.episodes,
-        "log_dir": args.results_dir,
-        "exp_name": exp_name,
+        "log_dir": ".",  # Save in root
+        "exp_name": f"Scenario {args.scenario} Result",
         "use_amp": not args.no_amp,
         "learning_starts": getattr(args, 'learning_starts', 5000),
         "target_update_interval": args.target_update
@@ -118,15 +117,6 @@ def run_train(args):
     print(f"\nTraining completed!")
     print(f"  Best model: {result['best_model_path']}")
     
-    # Copy best model to Result/scenarioX/
-    result_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
-                              "Result", f"scenario{args.scenario}")
-    os.makedirs(result_dir, exist_ok=True)
-    best_model_dest = os.path.join(result_dir, "best_model.pt")
-    
-    if os.path.exists(result['best_model_path']):
-        shutil.copy(result['best_model_path'], best_model_dest)
-        print(f"  Saved to: {best_model_dest}")
     
     # Generate visualizations
     print("\nGenerating training visualizations...")
@@ -147,11 +137,13 @@ def run_test(args):
     class TestArgs:
         def __init__(self, args):
             result_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
-                                      "Result", f"scenario{args.scenario}")
-            default_model = os.path.join(result_dir, "best_model.pt")
+                                      f"Scenario {args.scenario} Result")
+            default_model = os.path.join(result_dir, "checkpoints", "best_model.pt")
             if not os.path.exists(default_model):
-                exp_dir = os.path.join(args.results_dir, args.exp_name or f"scenario{args.scenario}")
-                default_model = os.path.join(exp_dir, "checkpoints", "best_model.pt")
+                # Fallback to direct best_model.pt if expected path fails
+                 potential_path = os.path.join(result_dir, "best_model.pt")
+                 if os.path.exists(potential_path):
+                     default_model = potential_path
             
             self.model = args.model or default_model
             self.scenario = args.scenario
@@ -175,10 +167,10 @@ def run_video(args):
     from visualize import generate_video
     
     result_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
-                              "Result", f"scenario{args.scenario}")
-    model_path = args.model or os.path.join(result_dir, "best_model.pt")
+                              f"Scenario {args.scenario} Result")
+    model_path = args.model or os.path.join(result_dir, "checkpoints", "best_model.pt")
     
-    media_dir = os.path.join(result_dir, "media")
+    media_dir = result_dir
     os.makedirs(media_dir, exist_ok=True)
     output_path = os.path.join(media_dir, f"scenario{args.scenario}_demo.gif")
     
@@ -204,9 +196,9 @@ def run_visualize(args):
     from visualize import plot_training_results
     
     training_result_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 
-                                       "training_result", f"scenario{args.scenario}")
+                                       f"Scenario {args.scenario} Result")
     history_dir = os.path.join(training_result_dir, "checkpoints")
-    media_dir = os.path.join(training_result_dir, "media")
+    media_dir = training_result_dir
     os.makedirs(media_dir, exist_ok=True)
     
     if os.path.exists(os.path.join(history_dir, "training_history.npz")):

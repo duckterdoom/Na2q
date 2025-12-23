@@ -4,7 +4,6 @@ from .models import NA2QAgent
 from .test import test, run_quick_test
 from .utils import (
     EpisodeReplayBuffer,
-    SimpleReplayBuffer,
     Logger,
     MetricsTracker,
     get_device,
@@ -16,7 +15,6 @@ __all__ = [
     "make_env",
     "NA2QAgent",
     "EpisodeReplayBuffer",
-    "SimpleReplayBuffer",
     "Logger",
     "MetricsTracker",
     "get_device",
