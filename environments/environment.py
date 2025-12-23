@@ -417,8 +417,8 @@ class DSNEnv(gym.Env):
             self.ax.set_facecolor('#f8f9fa')
         
         self.ax.clear()
-        self.ax.set_xlim(-3, self.field_size + 3)
-        self.ax.set_ylim(-3, self.field_size + 3)
+        self.ax.set_xlim(-10, self.field_size + 10)
+        self.ax.set_ylim(-10, self.field_size + 10)
         self.ax.set_aspect('equal')
         self.ax.set_facecolor('#f8f9fa')
         
